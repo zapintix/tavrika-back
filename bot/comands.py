@@ -4,6 +4,7 @@ from telegram import (
 )
 from telegram.ext import ContextTypes
 import json, requests, urllib.parse
+from redis_config.redis_helpers import get_user_data, set_user_data, clear_user_data
 
 class ReservationBot:
     WEB_APP_URL = "https://hgq64vxn-8002.euw.devtunnels.ms/test"
@@ -63,7 +64,12 @@ class ReservationBot:
 
     # -------------------- Start --------------------
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        context.user_data.clear()
+        user_id = update.effective_user.id
+        await clear_user_data(user_id)
+        
+        data = await get_user_data(user_id)
+
+        data.clear()
         await update.message.reply_text(
             "Добро пожаловать!\n\n"
             "Я помогу вам зарезервировать стол.\n"
@@ -71,7 +77,7 @@ class ReservationBot:
         )
         await update.message.reply_text(
             "Выберите, что хотите указать:",
-            reply_markup=self.build_keyboard(context.user_data)
+            reply_markup=self.build_keyboard(data)
         )
 
     # -------------------- Клавиатуры --------------------
@@ -118,28 +124,44 @@ class ReservationBot:
         action = query.data
 
         if action == "edit_phone":
-            await self.edit_phone(query, context)
+            await self.edit_phone(update,query)
         elif action == "edit_guests":
-            await self.edit_guests(query, context)
+            await self.edit_guests(query)
         elif action == "edit_table":
-            await self.edit_table(query, context)
+            await self.edit_table(query)
         elif action == "continue":
-            await self.confirm_reservation(query, context)
+            await self.confirm_reservation(query)
 
-    async def edit_phone(self, query, context):
-        context.user_data["step"] = "phone"
+    async def edit_phone(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        user_id = query.from_user.id
+        
+        data = await get_user_data(user_id)
+        data["step"] = "phone"
+        await set_user_data(user_id, data)
+
         await query.message.reply_text(
             "Укажите ваш номер телефона, нажав на кнопку ⬇️",
             reply_markup=self.phone_keyboard()
         )
 
-    async def edit_guests(self, query, context):
-        context.user_data["step"] = "guests"
+    async def edit_guests(self, query):
+        user_id = query.from_user.id
+        
+        data = await get_user_data(user_id)
+        data["step"] = "guests"
+        await set_user_data(user_id, data)
+        
         await query.message.edit_text("Введите количество гостей:")
 
-    async def edit_table(self, query, context):
-        context.user_data["step"] = "table"
-        iiko_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJBcGlMb2dpbklkIjoiMzFlNmE4OTAtNGY3My00MmM0LWFiNzQtMjJhN2ExMTU1OTgzIiwibmJmIjoxNzY2MTM3ODM0LCJleHAiOjE3NjYxNDE0MzQsImlhdCI6MTc2NjEzNzgzNCwiaXNzIjoiaWlrbyIsImF1ZCI6ImNsaWVudHMifQ.7aV_a-s1ZntQZ-VcWpNqVo_jybeS-YvjjsEsPb4Aluk"
+    async def edit_table(self, query):
+        user_id = query.from_user.id
+        
+        data = await get_user_data(user_id)
+        data["step"] = "table"
+        await set_user_data(user_id, data)
+
+        iiko_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJBcGlMb2dpbklkIjoiMzFlNmE4OTAtNGY3My00MmM0LWFiNzQtMjJhN2ExMTU1OTgzIiwibmJmIjoxNzY2MTUwOTkwLCJleHAiOjE3NjYxNTQ1OTAsImlhdCI6MTc2NjE1MDk5MCwiaXNzIjoiaWlrbyIsImF1ZCI6ImNsaWVudHMifQ.MJD0lRhvdI_YnsBkXptxZAiDge38sJlSPbEQ_2lz9Wc"
         terminal_group_id = "6c03d026-3597-afab-0194-600d43c50065"
         tables = await self.fetch_tables(iiko_token, terminal_group_id)
         await query.message.reply_text(
@@ -147,32 +169,48 @@ class ReservationBot:
             reply_markup=self.table_keyboard(tables)
         )
 
-    async def confirm_reservation(self, query, context):
+    async def confirm_reservation(self, query):
+        user_id = query.from_user.id
+        data = await get_user_data(user_id)
+
         await query.message.edit_text(
             f"✅ Резервация подтверждена:\n"
-            f"📞 {context.user_data['phone']}\n"
-            f"🍽 Стол {context.user_data['table']}\n"
-            f"👥 {context.user_data['guests']} гостей"
+            f"📞 {data['phone']}\n"
+            f"🍽 Стол {data['table']}\n"
+            f"👥 {data['guests']} гостей"
         )
 
     # -------------------- Обработчики данных --------------------
     async def number_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         contact = update.message.contact
-        if contact:
-            context.user_data["phone"] = contact.phone_number
-            context.user_data.pop("step", None)
-            await update.message.reply_text("Телефон сохранён ✅", reply_markup=ReplyKeyboardRemove())
-            await update.message.reply_text(
-                "Выберите, что хотите указать:",
-                reply_markup=self.build_keyboard(context.user_data)
-            )
+        if not contact:
+            return
+        
+        user_id = update.effective_user.id
+
+        data = await get_user_data(user_id)
+
+        data["phone"] = contact.phone_number
+        data.pop("step", None)
+        await set_user_data(user_id, data)
+
+        await update.message.reply_text("Телефон сохранён ✅", reply_markup=ReplyKeyboardRemove())
+        await update.message.reply_text(
+            "Выберите, что хотите указать:",
+            reply_markup=self.build_keyboard(data)
+        )
 
     async def web_app_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+
+        data = await get_user_data(user_id)
+
         web_data = update.message.web_app_data
         payload = json.loads(web_data.data)
 
         if payload.get("action") == "select_table":
-            context.user_data["table"] = payload.get("tableId")
+            data["table"] = payload.get("tableId")
+            await set_user_data(user_id, data)
 
         await update.message.reply_text(
             f"Стол {payload.get('tableId')} выбран ✅",
@@ -180,11 +218,14 @@ class ReservationBot:
         )
         await update.message.reply_text(
             "Выберите, что хотите указать:",
-            reply_markup=self.build_keyboard(context.user_data)
+            reply_markup=self.build_keyboard(data)
         )
 
     async def text_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        step = context.user_data.get("step")
+        user_id = update.effective_user.id
+
+        data = await get_user_data(user_id)
+        step = data.get("step")
         if not step:
             return
 
@@ -204,10 +245,11 @@ class ReservationBot:
             if int(value) > 6:
                 await update.message.reply_text("❌ Стол не выдержит больше 6 гостей")
                 return
-            context.user_data["guests"] = value
+            data["guests"] = value
 
-        context.user_data.pop("step")
+        data.pop("step")
+        await set_user_data(user_id, data)
         await update.message.reply_text(
             "Данные обновлены ✅",
-            reply_markup=self.build_keyboard(context.user_data)
+            reply_markup=self.build_keyboard(data)
         )
