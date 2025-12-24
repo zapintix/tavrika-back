@@ -1,6 +1,11 @@
 from telegram.ext import CommandHandler, MessageHandler, ApplicationBuilder, filters, CallbackQueryHandler
 from bot.comands import ReservationBot
-TOKEN = "8328702156:AAH_aRdk-2uFIgM7gdkSR1dhBzH3vKTUSOI"
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+TOKEN = os.getenv("TOKEN")
 
 
 def main():
