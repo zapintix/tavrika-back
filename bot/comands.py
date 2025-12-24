@@ -3,8 +3,11 @@ from telegram import (
     ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, ReplyKeyboardRemove
 )
 from telegram.ext import ContextTypes
+from redis_config import redis_helpers
+from admin.comands import admin_pagination_callback
 import json, requests, urllib.parse
-from redis_config.redis_helpers import get_user_data, set_user_data, clear_user_data
+from redis_config.redis_helpers import get_user_data, set_user_data
+from admin.comands import is_admin, admin_start
 from iiko_token.update_token import update_iiko_token
 from dotenv import load_dotenv
 import os
@@ -66,24 +69,44 @@ class ReservationBot:
             tables_info.append(section_info)
 
         return tables_info
+    
+    async def delete_msg(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        msgs = context.user_data.get("delete_msg", [])
+        if not isinstance(msgs, list):
+            msgs = [msgs]
+        for msg_id in msgs:
+            try:
+                await context.bot.delete_message(
+                    chat_id=update.effective_chat.id,
+                    message_id=msg_id
+                )
+            except Exception as e:
+                print(f"Не удалось удалить сообщение {msg_id}: {e}")
 
     # -------------------- Start --------------------
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
-        await clear_user_data(user_id)
+
+        print(user_id)
+        if is_admin(user_id):
+            await admin_start(update, context)
+            return
         
         data = await get_user_data(user_id)
 
         data.clear()
-        await update.message.reply_text(
+        delete_msg1 = await update.message.reply_text(
             "Добро пожаловать!\n\n"
             "Я помогу вам зарезервировать стол.\n"
             "Пожалуйста, заполните данные ниже 👇"
         )
-        await update.message.reply_text(
+        
+        delete_msg2 = await update.message.reply_text(
             "Выберите, что хотите указать:",
             reply_markup=self.build_keyboard(data)
         )
+        context.user_data['delete_msg'] = [delete_msg1.message_id, delete_msg2.message_id]
+
 
     # -------------------- Клавиатуры --------------------
     def build_keyboard(self, data: dict) -> InlineKeyboardMarkup:
@@ -120,31 +143,46 @@ class ReservationBot:
     async def callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
         await query.answer()
-        action = query.data
         user_id = query.from_user.id
 
+        # Для админа
+        if is_admin(user_id):
+            if query.data == "view_reservations" or query.data.startswith("page:"):
+                await admin_pagination_callback(update, context)
+                return
+
+        # Для обычного пользователя
+        action = query.data
         if action == "edit_phone":
             await self.edit_phone(update, context)
         elif action == "edit_table":
-            await self.edit_table(query, context)
+            await self.edit_table(update, query, context)
         elif action == "continue":
-            await self.confirm_reservation(query, context)
+            await self.confirm_reservation(update, query, context)
+
 
     async def edit_phone(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
         user_id = query.from_user.id
+
+        await self.delete_msg(update, context)
         
         data = await get_user_data(user_id)
         data["step"] = "phone"
         await set_user_data(user_id, data)
 
-        await query.message.reply_text(
-            "Укажите ваш номер телефона, нажав на кнопку ⬇️",
+        delete_msg = await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text="Укажите ваш номер телефона, нажав на кнопку ⬇️",
             reply_markup=self.phone_keyboard()
-        )
+    )
+        context.user_data['delete_msg'] = delete_msg.message_id
 
-    async def edit_table(self, query, context: ContextTypes.DEFAULT_TYPE):
+
+
+    async def edit_table(self, update: Update, query, context: ContextTypes.DEFAULT_TYPE):
         user_id = query.from_user.id
+        await self.delete_msg(update, context)
         
         data = await get_user_data(user_id)
         data["step"] = "table"
@@ -153,14 +191,33 @@ class ReservationBot:
         terminal_group_id = os.getenv("TERMINAL_GROUP_ID")
         tables = await self.fetch_tables(update_iiko_token(os.getenv("IIKO_KEY")), terminal_group_id)
         
-        await query.message.reply_text(
-            "Нажмите на кнопку для выбора стола ⬇️",
+        delete_msg = await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text="Нажмите на кнопку для выбора стола ⬇️",
             reply_markup=self.table_keyboard(tables)
         )
+        context.user_data['delete_msg'] = delete_msg.message_id
 
-    async def confirm_reservation(self, query, context: ContextTypes.DEFAULT_TYPE):
+
+
+
+    async def confirm_reservation(self, update: Update, query, context: ContextTypes.DEFAULT_TYPE):
         user_id = query.from_user.id
         data = await get_user_data(user_id)
+
+        await self.delete_msg(update, context)
+
+
+        res_id = await redis_helpers.save_reservation({
+        "user_id": user_id,
+        "phone": data["phone"],
+        "table": data["table"],
+        "date": data["date"],
+        "time": data["time"]
+    })
+
+
+
         await query.message.reply_text(
                     f"✅ Резервация подтверждена:\n"
                     f"📞 Телефон: {data['phone']}\n"
@@ -184,11 +241,16 @@ class ReservationBot:
         data.pop("step", None)
         await set_user_data(user_id, data)
 
-        await update.message.reply_text("Телефон сохранён ✅", reply_markup=ReplyKeyboardRemove())
-        await update.message.reply_text(
+        delete_msg1 = await update.message.reply_text(
+            "Телефон сохранён ✅",
+            reply_markup=ReplyKeyboardRemove())
+
+        delete_msg2 = await update.message.reply_text(
             "Выберите, что хотите указать:",
             reply_markup=self.build_keyboard(data)
         )
+        context.user_data['delete_msg'] = [delete_msg1.message_id, delete_msg2.message_id]
+
 
     async def web_app_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
@@ -206,14 +268,18 @@ class ReservationBot:
             data["date"] = payload.get("date")
             await set_user_data(user_id, data)
         
-        await update.message.reply_text(
-            f"Стол {payload.get('tableNumber')} выбран ✅",
-            reply_markup=ReplyKeyboardRemove()
-        )
-        await update.message.reply_text(
+        delete_msg1 = await update.message.reply_text(
+        "Стол выбран ✅",
+        reply_markup=ReplyKeyboardRemove()
+    )
+
+
+        delete_msg2 = await update.message.reply_text(
             "Выберите, что хотите указать:",
             reply_markup=self.build_keyboard(data)
         )
+        context.user_data['delete_msg'] = [delete_msg1.message_id, delete_msg2.message_id]
+
 
     async def text_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id

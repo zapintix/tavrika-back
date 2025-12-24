@@ -1,6 +1,7 @@
 from telegram.ext import CommandHandler, MessageHandler, ApplicationBuilder, filters, CallbackQueryHandler
 from bot.comands import ReservationBot
 from dotenv import load_dotenv
+from admin.comands import admin_pagination_callback
 import os
 
 load_dotenv()
