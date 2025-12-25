@@ -2,7 +2,17 @@ import json
 import uuid
 from redis_config import redis_client as redis
 
+CHANNEL = "new-reservations"
 REQUESTS_LIST = "reservation:requests"
+
+async def listen_new_reservations(callback):
+    pubsub = redis.redis_client.pubsub()
+    await pubsub.subscribe(CHANNEL)
+    async for message in pubsub.listen():
+        if message["type"] == "message":
+            data = message["data"]
+            await callback(data)
+
 
 def redis_key(user_id:int) -> str:
     return f"reservation:{user_id}"
@@ -30,6 +40,7 @@ async def save_reservation(data:dict)->str:
     reserv = {
         "id": res_id,
         "user_id": data["user_id"],
+        "name":data["name"],
         "phone": data["phone"],
         "table": data["table"],
         "date": data["date"],
@@ -41,4 +52,15 @@ async def save_reservation(data:dict)->str:
 
     await redis.redis_client.rpush(REQUESTS_LIST, res_id)
 
+    await redis.redis_client.publish("new-reservations", json.dumps(reserv))
+
     return res_id
+
+async def get_reservation_by_id(res_id: str) -> dict | None:
+    data = await redis.redis_client.get(reservation_key(res_id))
+    if not data:
+        return None
+    return json.loads(data)
+
+async def delete_reservation_by_id(res_id: str):
+    await redis.redis_client.delete(reservation_key(res_id))

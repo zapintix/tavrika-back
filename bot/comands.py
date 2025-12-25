@@ -4,7 +4,7 @@ from telegram import (
 )
 from telegram.ext import ContextTypes
 from redis_config import redis_helpers
-from admin.comands import admin_pagination_callback
+from admin.comands import admin_pagination_callback, view_reservation, handle_reservation_decision
 import json, requests, urllib.parse
 from redis_config.redis_helpers import get_user_data, set_user_data
 from admin.comands import is_admin, admin_start
@@ -15,13 +15,13 @@ import os
 load_dotenv()
 
 class ReservationBot:
-
     WEB_APP_URL = os.getenv("WEB_APP_URL")
     IIKO_API_URL = os.getenv("IIKO_API_URL")
 
-    def __init__(self):
-        pass
+    def __init__(self, app):
+        self.application = app
 
+    
     async def fetch_tables(self, token: str, terminal_group_id: str):
         headers = {
             "Authorization": f"Bearer {token}",
@@ -37,7 +37,6 @@ class ReservationBot:
         response = requests.post(self.IIKO_API_URL, json=payload, headers=headers)
         response.raise_for_status()
         data = response.json()
-        print(data)
         tables_info = []
         for section in data.get("restaurantSections", []):
             section_info = {
@@ -86,8 +85,9 @@ class ReservationBot:
     # -------------------- Start --------------------
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
+        user = update.effective_user
 
-        print(user_id)
+        
         if is_admin(user_id):
             await admin_start(update, context)
             return
@@ -95,6 +95,11 @@ class ReservationBot:
         data = await get_user_data(user_id)
 
         data.clear()
+        
+        data["name"] = user.first_name
+
+        await set_user_data(user_id, data)
+
         delete_msg1 = await update.message.reply_text(
             "Добро пожаловать!\n\n"
             "Я помогу вам зарезервировать стол.\n"
@@ -147,9 +152,27 @@ class ReservationBot:
 
         # Для админа
         if is_admin(user_id):
-            if query.data == "view_reservations" or query.data.startswith("page:"):
+            action = query.data
+            if action == "view_reservations" or query.data.startswith("page:"):
                 await admin_pagination_callback(update, context)
-                return
+            
+            if action.startswith("reservation:"):
+                _, reservation_id, index = action.split(":")
+                index = int(index)
+
+                await view_reservation(update, context, reservation_id, index)
+            
+            if (action.startswith("approve")):
+                _, reservation_id = action.split(":")
+                await handle_reservation_decision(update, context, reservation_id, True)
+
+            if action.startswith("reject"):
+                _, reservation_id = action.split(":")
+                await handle_reservation_decision(update, context, reservation_id, False)
+
+
+
+            
 
         # Для обычного пользователя
         action = query.data
@@ -198,7 +221,23 @@ class ReservationBot:
         )
         context.user_data['delete_msg'] = delete_msg.message_id
 
+    async def new_reservation_notification(self, reservation_json: str):
+        reservation = json.loads(reservation_json)
 
+        admin_ids = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x]
+        for admin_id in admin_ids:
+            try:
+                await self.application.bot.send_message(
+                    chat_id=admin_id,
+                    text=(
+                        f"📋 Новая заявка:\n"
+                        f"📞 {reservation['phone']}\n"
+                        f"🍽 Стол {reservation['table']}\n"
+                        f"📅 {reservation['date']} {reservation['time']}"
+                    )
+                )
+            except Exception as e:
+                print(f"Ошибка при отправке уведомления админу {admin_id}: {e}")
 
 
     async def confirm_reservation(self, update: Update, query, context: ContextTypes.DEFAULT_TYPE):
@@ -210,6 +249,7 @@ class ReservationBot:
 
         res_id = await redis_helpers.save_reservation({
         "user_id": user_id,
+        "name":data["name"],
         "phone": data["phone"],
         "table": data["table"],
         "date": data["date"],
@@ -298,7 +338,3 @@ class ReservationBot:
 
         data.pop("step")
         await set_user_data(user_id, data)
-        await update.message.reply_text(
-            "Данные обновлены ✅",
-            reply_markup=self.build_keyboard(data)
-        )
