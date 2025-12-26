@@ -41,6 +41,39 @@ async def admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup= markup
     )
 
+async def update_admin_list(application, view):
+        reservations = await get_all_reservations()
+        per_page = 5
+        page = view["page"]
+
+        start = page * per_page
+        end = start + per_page
+        page_items = reservations[start:end]
+
+        keyboard = []
+        for index, r in enumerate(page_items, start=start):
+            button_text = f"👤 {r['name']}\n📞 {r['phone']}"
+            keyboard.append([
+                InlineKeyboardButton(
+                    button_text,
+                    callback_data=f"reservation:{r['id']}:{index}"
+                )
+            ])
+
+        if not page_items:
+            keyboard.append([InlineKeyboardButton("❌ Заявок нет", callback_data="noop")])
+
+        total_pages = (len(reservations) + per_page - 1) // per_page
+        pagination = build_pagination_keyboard(page, total_pages)
+        if pagination.inline_keyboard:
+            keyboard.extend(pagination.inline_keyboard)
+
+        await application.bot.edit_message_text(
+            chat_id=view["chat_id"],
+            message_id=view["message_id"],
+            text="📋 Заявки:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
  
 def build_pagination_keyboard(current_page, total_pages):
     keyboard = []
@@ -83,6 +116,12 @@ async def admin_pagination_callback(update: Update, context: ContextTypes.DEFAUL
             )
         ])
 
+    if not page_items:
+            print(page_items)
+            keyboard.append([
+        InlineKeyboardButton("❌ Заявок нет", callback_data="noop")
+    ])
+            
     total_pages = (len(reservations) + per_page - 1) // per_page
     pagination = build_pagination_keyboard(page, total_pages)
 
@@ -94,6 +133,15 @@ async def admin_pagination_callback(update: Update, context: ContextTypes.DEFAUL
         text="📋 Заявки:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
+
+    admin_id = query.from_user.id
+    view = context.application.bot_data[f"admin_view:{admin_id}"] = {
+        "chat_id": query.message.chat_id,
+        "message_id": query.message.message_id,
+        "page": page
+    }
+
+    print("Данные страницы админа: ",view)
 
 async def view_reservation(update: Update, context: ContextTypes.DEFAULT_TYPE, reservation_id, index):
     reservations = await get_all_reservations()

@@ -4,7 +4,7 @@ from telegram import (
 )
 from telegram.ext import ContextTypes
 from redis_config import redis_helpers
-from admin.comands import admin_pagination_callback, view_reservation, handle_reservation_decision
+from admin.comands import admin_pagination_callback, view_reservation, handle_reservation_decision, update_admin_list
 import json, requests, urllib.parse
 from redis_config.redis_helpers import get_user_data, set_user_data
 from admin.comands import is_admin, admin_start
@@ -222,22 +222,13 @@ class ReservationBot:
         context.user_data['delete_msg'] = delete_msg.message_id
 
     async def new_reservation_notification(self, reservation_json: str):
-        reservation = json.loads(reservation_json)
-
         admin_ids = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x]
         for admin_id in admin_ids:
-            try:
-                await self.application.bot.send_message(
-                    chat_id=admin_id,
-                    text=(
-                        f"📋 Новая заявка:\n"
-                        f"📞 {reservation['phone']}\n"
-                        f"🍽 Стол {reservation['table']}\n"
-                        f"📅 {reservation['date']} {reservation['time']}"
-                    )
-                )
-            except Exception as e:
-                print(f"Ошибка при отправке уведомления админу {admin_id}: {e}")
+            view_key = f"admin_view:{admin_id}"
+            view = self.application.bot_data.get(view_key)
+            
+            if view:
+                await update_admin_list(self.application, view)
 
 
     async def confirm_reservation(self, update: Update, query, context: ContextTypes.DEFAULT_TYPE):
