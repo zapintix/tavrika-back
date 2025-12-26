@@ -10,6 +10,8 @@ from redis_config.redis_helpers import get_user_data, set_user_data
 from admin.comands import is_admin, admin_start
 from iiko_token.update_token import update_iiko_token
 from dotenv import load_dotenv
+from datetime import date
+
 import os
 
 load_dotenv()
@@ -37,6 +39,7 @@ class ReservationBot:
         response = requests.post(self.IIKO_API_URL, json=payload, headers=headers)
         response.raise_for_status()
         data = response.json()
+        print(data)
         tables_info = []
         for section in data.get("restaurantSections", []):
             section_info = {
@@ -46,6 +49,7 @@ class ReservationBot:
                     {
                         "id": t["id"],
                         "number": t["number"],
+                        "seatingCapacity": t["seatingCapacity"],
                         "name": t.get("name", f"Стол {t['number']}"),
                         "x": None,
                         "y": None,
@@ -68,7 +72,35 @@ class ReservationBot:
             tables_info.append(section_info)
 
         return tables_info
-    
+
+    async def fetch_day_reservations(self, date: str):
+        token = update_iiko_token(os.getenv("IIKO_KEY"))
+        section_id = os.getenv("SECTION_ID")
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "restaurantSectionIds": [section_id],
+            "dateFrom": f"{date}T00:00:00",
+            "dateTo": f"{date}T23:59:59"
+        }
+
+        response = requests.post(
+            "https://api-ru.iiko.services/api/1/reserve/restaurant_sections_workload",
+            json=payload,
+            headers=headers
+        )
+
+
+        response.raise_for_status()
+        return response.json().get("reserves", [])
+
+
+
+
     async def delete_msg(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         msgs = context.user_data.get("delete_msg", [])
         if not isinstance(msgs, list):
@@ -84,6 +116,7 @@ class ReservationBot:
 
     # -------------------- Start --------------------
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+
         user_id = update.effective_user.id
         user = update.effective_user
 
