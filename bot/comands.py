@@ -203,10 +203,6 @@ class ReservationBot:
                 _, reservation_id = action.split(":")
                 await handle_reservation_decision(update, context, reservation_id, False)
 
-
-
-            
-
         # Для обычного пользователя
         action = query.data
         if action == "edit_phone":
@@ -327,6 +323,7 @@ class ReservationBot:
         print("Данные из WebApp:", payload)
         
         if payload.get("action") == "create_reservation":
+            data["tableId"] = payload.get("tableId")
             data["table"] = payload.get("tableNumber")
             data["time"] = payload.get("time")
             data["date"] = payload.get("date")

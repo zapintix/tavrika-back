@@ -3,9 +3,10 @@ from telegram import (
 )
 from telegram.ext import ContextTypes
 from redis_config import redis_client as redis
-from redis_config.redis_helpers import get_reservation_by_id, delete_reservation_by_id
-import json
-import os
+from redis_config.redis_helpers import get_reservation_by_id, delete_reservation_by_id, get_user_data
+from iiko_token.update_token import update_iiko_token
+import json, os, httpx, uuid
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -188,6 +189,51 @@ async def view_reservation(update: Update, context: ContextTypes.DEFAULT_TYPE, r
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
+def format_phone(phone: str) -> str:
+    digits = "".join(filter(str.isdigit, phone))
+    if digits.startswith("8"):
+        digits = "7" + digits[1:]
+    return "+" + digits
+
+async def create_reserve(reservation_data: dict):
+    token = update_iiko_token(os.getenv("IIKO_KEY"))
+    reserve_id = str(uuid.uuid4())
+    external_number = f"RES-{reserve_id[:8]}"
+
+    dt = datetime.fromisoformat(f"{reservation_data['date']}T{reservation_data['time']}")
+    iso_date = dt.isoformat()
+
+    body = {
+        "organizationId": os.getenv("ORGANIZATION_ID"),
+        "terminalGroupId": os.getenv("TERMINAL_GROUP_ID"),
+        "externalNumber": external_number,
+        "customer": {
+            "name": reservation_data["name"],
+            "type": "one-time"
+        },
+        "phone": format_phone(reservation_data["phone"]),
+        "guestsCount": reservation_data.get("guests_count", 2),
+        "comment": "TEST запрос",
+        "durationInMinutes": 120,
+        "shouldRemind": True,
+        "tableIds": [reservation_data["table_id"]],
+        "estimatedStartTime": iso_date,
+        "eventType": reservation_data.get("eventType", "telegram_bot")
+    }
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token}" 
+    }
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.post(os.getenv("IIKO_CREATE_URL"), headers=headers, json=body)
+
+    if r.status_code != 200:
+        return {"Status": "error", "iiko_response": r.text}
+
+    return {"status": "created", "reserve_id": reserve_id, "iiko": r.json()}   
+
 async def handle_reservation_decision(update: Update, context: ContextTypes.DEFAULT_TYPE, reservation_id, approved:bool):
     query = update.callback_query
     await query.answer()
@@ -199,6 +245,7 @@ async def handle_reservation_decision(update: Update, context: ContextTypes.DEFA
 
     user_id = reservation["user_id"]
 
+    data = await get_user_data(user_id)
 
     if approved:
         user_text = (
@@ -207,12 +254,25 @@ async def handle_reservation_decision(update: Update, context: ContextTypes.DEFA
             f"🍽 Стол: {reservation['table']}"
         )
 
+        reservation_result = await create_reserve({
+        "name": data["name"],
+        "phone": data["phone"],
+        "table_id": data["tableId"],
+        "date": data["date"],
+        "time": data["time"]
+        })
+
+        print(reservation_result)
+
+
     else:
         user_text = (
             "❌ К сожалению, заявка была отклонена.\n"
             "Попробуйте выбрать другое время."
         )
     
+    
+
     await delete_reservation_by_id(reservation_id)
     
     await context.bot.send_message(chat_id=user_id, text=user_text)
