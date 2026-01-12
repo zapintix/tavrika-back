@@ -12,34 +12,30 @@ services:
       - tavrika
 
   api:
-    build: .
-    container_name: reservation-api
-    env_file:
-      - .env
-    depends_on:
-      - redis
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    
-    networks:
-      - tavrika
+  build:
+    context: .
+    dockerfile: Dockerfile.api
+  container_name: reservation-api
+  env_file:
+    - .env
+  depends_on:
+    - redis
+  restart: unless-stopped
+  ports:
+    - "8000:8000"
+  networks:
+    - tavrika
 
-  bot:
-    build: .
-    container_name: reservation-bot
-    env_file:
-      - .env
-    depends_on:
-      - redis
-    restart: unless-stopped
+bot:
+  build:
+    context: .
+    dockerfile: Dockerfile.bot
+  container_name: reservation-bot
+  env_file:
+    - .env
+  depends_on:
+    - redis
+  restart: unless-stopped
+  networks:
+    - tavrika
 
-    networks:
-      - tavrika
-
-volumes:
-  redis_data:
-
-networks:
-  tavrika:
-    driver: bridge
