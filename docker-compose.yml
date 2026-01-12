@@ -8,6 +8,22 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - tavrika
+
+  api:
+    build: .
+    container_name: reservation-api
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    restart: unless-stopped
+    command: uvicorn api_main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    networks:
+      - tavrika
 
   bot:
     build: .
@@ -17,6 +33,13 @@ services:
     depends_on:
       - redis
     restart: unless-stopped
+    command: python main.py
+    networks:
+      - tavrika
 
 volumes:
   redis_data:
+
+networks:
+  tavrika:
+    driver: bridge

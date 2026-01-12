@@ -3,7 +3,7 @@ from telegram import (
 )
 from telegram.ext import ContextTypes
 from redis_config import redis_client as redis
-from redis_config.redis_helpers import get_reservation_by_id, delete_reservation_by_id, get_user_data
+from redis_config.redis_helpers import get_reservation_by_id,update_reservation_status,  delete_reservation_by_id, get_user_data
 from iiko_token.update_token import update_iiko_token
 import json, os, httpx, uuid
 from datetime import datetime
@@ -26,7 +26,9 @@ async def get_all_reservations() -> list[dict]:
     for res_id in ids:
         data = await redis.get(f"reservation:request:{res_id}")
         if data:
-            result.append(json.loads(data))
+            reservation = json.loads(data)
+            if reservation.get("status") == "PENDING":
+                result.append(json.loads(data))
 
     return result
 
@@ -263,6 +265,7 @@ async def handle_reservation_decision(update: Update, context: ContextTypes.DEFA
         })
 
         print(reservation_result)
+        update_reservation_status(reservation_id, "CONFIRMED")
 
 
     else:
@@ -270,11 +273,8 @@ async def handle_reservation_decision(update: Update, context: ContextTypes.DEFA
             "❌ К сожалению, заявка была отклонена.\n"
             "Попробуйте выбрать другое время."
         )
-    
-    
-
-    await delete_reservation_by_id(reservation_id)
-    
+        await update_reservation_status(reservation_id, "CANCELED")
+        
     await context.bot.send_message(chat_id=user_id, text=user_text)
 
     await admin_pagination_callback(update, context)

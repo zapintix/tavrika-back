@@ -64,3 +64,16 @@ async def get_reservation_by_id(res_id: str) -> dict | None:
 
 async def delete_reservation_by_id(res_id: str):
     await redis.redis_client.delete(reservation_key(res_id))
+
+async def update_reservation_status(res_id:str, new_status:str):
+    key = reservation_key(res_id)
+
+    data = await redis.redis_client.get(key)
+    if not data:
+        return False
+    
+    reservation = json.loads(data)
+
+    reservation["status"] = new_status
+    await redis.redis_client.set(key, json.dumps(reservation))
+    return True
