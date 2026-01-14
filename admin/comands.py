@@ -26,9 +26,7 @@ async def get_all_reservations() -> list[dict]:
     for res_id in ids:
         data = await redis.get(f"reservation:request:{res_id}")
         if data:
-            reservation = json.loads(data)
-            if reservation.get("status") == "PENDING":
-                result.append(json.loads(data))
+            result.append(json.loads(data))
 
     return result
 

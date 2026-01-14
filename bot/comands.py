@@ -194,6 +194,23 @@ class ReservationBot:
             [KeyboardButton("Выбрать стол", web_app=WebAppInfo(url=url))]
         ]
         return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+    
+
+    async def ask_cancel_confirmation(self, update, context, res_id: str):
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Да, удалить", callback_data=f"confirm_cancel:{res_id}"),
+                InlineKeyboardButton("❌ Нет, оставить", callback_data=f"deny_cancel:{res_id}")
+            ]
+        ]
+        markup = InlineKeyboardMarkup(keyboard)
+
+        query = update.callback_query
+        await query.answer()
+        await query.edit_message_text(
+            text="⚠️ Вы точно хотите удалить эту бронь?",
+            reply_markup=markup
+        )
     # -------------------- Callback --------------------
     async def callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -235,9 +252,17 @@ class ReservationBot:
 
         elif action.startswith("cancel:"):
             _, res_id = action.split(":")
+            await self.ask_cancel_confirmation(update, context, res_id)
+
+        elif action.startswith("confirm_cancel:"):
+            _, res_id = action.split(":")
             await cancel_reservation(res_id)
             await redis_helpers.delete_reservation_by_id(res_id)
-            await query.edit_message_text("Бронь отменена ✅")
+            await query.edit_message_text("Бронь успешно удалена ✅")
+            await self.show_user_reservations(update, context)
+
+        elif action.startswith("deny_cancel"):
+            await query.edit_message_text("Отмена удаления броней ❌")
             await self.show_user_reservations(update, context)
 
         elif action == "back_to_start":
@@ -392,7 +417,9 @@ class ReservationBot:
         reservations = await get_all_reservations()
 
         user_reservations = [r for r in reservations if (r["user_id"] == user_id and r["status"] == "CONFIRMED")]
-
+        user_reservations2 = [r for r in reservations if r["user_id"] == user_id]
+        print(user_reservations2)
+        print(user_reservations)
         keyboard1 = []
         keyboard1.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_start")])
         if not user_reservations:
