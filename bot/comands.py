@@ -7,7 +7,7 @@ from redis_config import redis_helpers
 from admin.comands import admin_pagination_callback, view_reservation, handle_reservation_decision, update_admin_list
 import json, requests, urllib.parse
 from redis_config.redis_helpers import get_user_data, set_user_data
-from admin.comands import is_admin, admin_start, get_all_reservations
+from admin.comands import is_admin, admin_start, get_all_reservations, cancel_reservation
 from iiko_token.update_token import update_iiko_token
 from dotenv import load_dotenv
 from datetime import date
@@ -235,6 +235,7 @@ class ReservationBot:
 
         elif action.startswith("cancel:"):
             _, res_id = action.split(":")
+            await cancel_reservation(res_id)
             await redis_helpers.delete_reservation_by_id(res_id)
             await query.edit_message_text("Бронь отменена ✅")
             await self.show_user_reservations(update, context)
@@ -304,12 +305,12 @@ class ReservationBot:
             })
 
         await query.message.reply_text(
-                    f"✅ Резервация подтверждена:\n"
+                    f"✅ Заявка создана:\n"
                     f"📞 Телефон: {data['phone']}\n"
                     f"🍽 Стол: {data['table']}\n"
                     f"📅 Дата: {data['date']}\n"
                     f"🕑 Время: {data['time']}\n\n"
-                    f"Спасибо за бронирование!"
+                    f"Дождитесь ответа администратора!"
                 )
 
     # -------------------- Обработчики данных --------------------
@@ -390,8 +391,7 @@ class ReservationBot:
 
         reservations = await get_all_reservations()
 
-        user_reservations = [r for r in reservations if r["user_id"] == user_id]
-
+        user_reservations = [r for r in reservations if (r["user_id"] == user_id and r["status"] == "CONFIRMED")]
 
         keyboard1 = []
         keyboard1.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_start")])

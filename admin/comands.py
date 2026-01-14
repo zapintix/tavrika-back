@@ -3,7 +3,7 @@ from telegram import (
 )
 from telegram.ext import ContextTypes
 from redis_config import redis_client as redis
-from redis_config.redis_helpers import get_reservation_by_id,update_reservation_status,  delete_reservation_by_id, get_user_data
+from redis_config.redis_helpers import get_reservation_by_id,update_reservation_status,  delete_reservation_by_id, get_user_data, get_iikoId_by_id
 from iiko_token.update_token import update_iiko_token
 import json, os, httpx, uuid
 from datetime import datetime
@@ -236,6 +236,44 @@ async def create_reserve(reservation_data: dict):
 
     return {"status": "created", "reserve_id": reserve_id, "iiko": r.json()}   
 
+async def cancel_reservation(reservation_id: str):
+    iiko_id = await get_iikoId_by_id(reservation_id)
+
+    if not iiko_id:
+        raise ValueError("iiko reserveId not found for this reservation")
+
+    token = update_iiko_token(os.getenv("IIKO_KEY"))
+
+    body = {
+        "organizationId": os.getenv("ORGANIZATION_ID"),
+        "reserveId": iiko_id,
+        "cancelReason": "ClientRefused"
+    }
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(
+            os.getenv("IIKO_CANCEL_URL"),
+            json=body,
+            headers=headers
+        )
+
+        if resp.status_code == 400:
+            return {
+                "success": False,
+                "reason": resp.text
+            }
+
+        resp.raise_for_status()
+        return {
+            "success": True,
+            "data": resp.json()
+        }
+    
 async def handle_reservation_decision(update: Update, context: ContextTypes.DEFAULT_TYPE, reservation_id, approved:bool):
     query = update.callback_query
     await query.answer()
@@ -273,7 +311,7 @@ async def handle_reservation_decision(update: Update, context: ContextTypes.DEFA
             "❌ К сожалению, заявка была отклонена.\n"
             "Попробуйте выбрать другое время."
         )
-        await update_reservation_status(reservation_id, "CANCELED")
+        await delete_reservation_by_id(reservation_id)
         
     await context.bot.send_message(chat_id=user_id, text=user_text)
 

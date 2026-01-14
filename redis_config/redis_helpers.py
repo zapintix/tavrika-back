@@ -62,10 +62,19 @@ async def get_reservation_by_id(res_id: str) -> dict | None:
         return None
     return json.loads(data)
 
+async def get_iikoId_by_id(res_id: str) -> str | None:
+    data = await redis.redis_client.get(reservation_key(res_id))
+    if not data:
+        return None
+
+    reservation = json.loads(data)
+    return reservation.get("id_iiko")
+
+
 async def delete_reservation_by_id(res_id: str):
     await redis.redis_client.delete(reservation_key(res_id))
 
-async def update_reservation_status(res_id:str, new_status:str):
+async def update_reservation_status(res_id:str, new_status:str, id_iiko: str):
     key = reservation_key(res_id)
 
     data = await redis.redis_client.get(key)
@@ -75,5 +84,8 @@ async def update_reservation_status(res_id:str, new_status:str):
     reservation = json.loads(data)
 
     reservation["status"] = new_status
+
+    if id_iiko is not None:
+        reservation["id_iiko"] = id_iiko
     await redis.redis_client.set(key, json.dumps(reservation))
     return True
