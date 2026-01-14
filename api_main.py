@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 from pydantic import BaseModel
 from bot.comands import ReservationBot
+from datetime import datetime, timedelta
 
 app = FastAPI(title="Reservation API")
 
@@ -28,19 +29,19 @@ async def get_reserved_tables(req: ReservationTableRequest):
     print("Гойда")
     day_reservations = await bot.fetch_day_reservations(req.date)
 
+    requested_time = datetime.fromisoformat(
+        f"{req.date}T{req.time}"
+    )
+
     reserved_table_ids: set[str] = set()
 
     for r in day_reservations:
-        start = r.get("estimatedStartTime")
-        duration = r.get("durationInMinutes")
-        table_ids = r.get("tableIds", [])
+        start = datetime.fromisoformat(r["estimatedStartTime"])
+        duration = r.get("durationInMinutes", 120) 
+        end = start + timedelta(minutes=duration)
 
-        start_time = start[11:16]
-
-        print(start_time)
-        print(req.time)
-        if start_time == req.time:
-            reserved_table_ids.update(table_ids)
+        if start <= requested_time < end:
+            reserved_table_ids.update(r.get("tableIds", []))
         print("reservedTableIds:", list(reserved_table_ids))
     return {
         "reservedTableIds": list(reserved_table_ids)
