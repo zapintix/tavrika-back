@@ -303,7 +303,9 @@ async def handle_reservation_decision(update: Update, context: ContextTypes.DEFA
         })
 
         print(reservation_result)
-        await update_reservation_status(reservation_id, "CONFIRMED", reservation_result["id"])
+        iiko_id = reservation_result["iiko"]["reserveInfo"]["id"]
+        await update_reservation_status(reservation_id, "CONFIRMED", iiko_id)
+
 
 
     else:
