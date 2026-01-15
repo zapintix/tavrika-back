@@ -137,11 +137,9 @@ class ReservationBot:
 
     async def send_welcome_messages(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
-        user = update.effective_user
 
         data = await get_user_data(user_id)
         data.clear()
-        data["name"] = user.first_name
         await set_user_data(user_id, data)
 
         message = update.message or update.callback_query.message
@@ -164,6 +162,7 @@ class ReservationBot:
 
     # -------------------- Клавиатуры --------------------
     def build_keyboard(self, data: dict) -> InlineKeyboardMarkup:
+        name = data.get("name", "Укажите ваше имя")
         phone = data.get("phone", "Укажите номер телефона")
         if "table" in data:
             table = f"Ваш стол: № {data['table']}"
@@ -171,11 +170,12 @@ class ReservationBot:
             table = "Выберите стол"
 
         keyboard = [
+            [InlineKeyboardButton(f"👤 {name}", callback_data="edit_name")],
             [InlineKeyboardButton(f"📱 {phone}", callback_data="edit_phone")],
             [InlineKeyboardButton(f"🍽 {table}", callback_data="edit_table")]
         ]
 
-        if phone != "Укажите номер телефона" and table != "Выберите стол":
+        if phone != "Укажите номер телефона" and table != "Выберите стол" and name != "Укажите ваше имя":
             keyboard.append([InlineKeyboardButton("✅ Подтвердить резервацию", callback_data="continue")])
 
         return InlineKeyboardMarkup(keyboard)
@@ -269,6 +269,8 @@ class ReservationBot:
             await self.send_welcome_messages(update, context)
         elif action == "edit_phone":
                 await self.edit_phone(update, context)
+        elif action == "edit_name":
+            await self.edit_name(update, context)
         elif action == "edit_table":
                 await self.edit_table(update, query, context)
         elif action == "continue":
@@ -313,10 +315,25 @@ class ReservationBot:
             chat_id=query.from_user.id,
             text="Укажите ваш номер телефона, нажав на кнопку ⬇️",
             reply_markup=self.phone_keyboard()
-    )
+            )
+        
         context.user_data['delete_msg'] = delete_msg.message_id
+    
+    async def edit_name(self, update:Update, context: ContextTypes):
+        query = update.callback_query
+        user_id = query.from_user.id
 
+        await self.delete_msg(update, context   )
+        
+        data = await get_user_data(user_id)
+        data["step"] = "name"
+        await set_user_data(user_id, data)
 
+        msg = await context.bot.send_message(
+            chat_id=user_id,
+            text="Введите ваше имя ✍️"
+        )
+        context.user_data['delete_msg'] = msg.message_id
 
     async def edit_table(self, update: Update, query, context: ContextTypes.DEFAULT_TYPE):
         user_id = query.from_user.id
@@ -433,6 +450,25 @@ class ReservationBot:
         data = await get_user_data(user_id)
         step = data.get("step")
         if not step:
+            return
+
+        if step == "name":
+            name = update.message.text.strip()
+            if len(name) < 2:
+                await update.message.reply_text("Имя слишком короткое, попробуйте ещё раз 🙏")
+                return
+            
+            data["name"] = name
+            data.pop("step", None)
+            await set_user_data(user_id, data)
+
+            msg1 = await update.message.reply_text("Имя сохранено ✅")
+            msg2 = await update.message.reply_text(
+                "Пожалуйста, укажите:",
+                reply_markup=self.build_keyboard(data)
+            )
+
+            context.user_data['delete_msg'] = [msg1.message_id, msg2.message_id]
             return
 
         if step == "phone":
