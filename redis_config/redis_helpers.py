@@ -43,6 +43,7 @@ async def save_reservation(data:dict)->str:
         "name":data["name"],
         "phone": data["phone"],
         "table": data["table"],
+        "tableId":data["tableId"],
         "date": data["date"],
         "time": data["time"],
         "status": "PENDING"

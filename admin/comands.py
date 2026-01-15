@@ -287,8 +287,6 @@ async def handle_reservation_decision(update: Update, context: ContextTypes.DEFA
 
     user_id = reservation["user_id"]
 
-    data = await get_user_data(user_id)
-
     if approved:
         user_text = (
             "✅ Ваша заявка подтверждена!\n\n"
@@ -297,11 +295,11 @@ async def handle_reservation_decision(update: Update, context: ContextTypes.DEFA
         )
 
         reservation_data = {
-        "name": data["name"],
-        "phone": data["phone"],
-        "table_id": data["tableId"],
-        "date": data["date"],
-        "time": data["time"]
+        "name": reservation["name"],
+        "phone": reservation["phone"],
+        "table_id": reservation["tableId"],
+        "date": reservation["date"],
+        "time": reservation["time"]
         }
 
         reservation_result = await create_reserve(reservation_data)

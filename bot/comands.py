@@ -325,6 +325,7 @@ class ReservationBot:
             "name":data["name"],
             "phone": data["phone"],
             "table": data["table"],
+            "tableId":data["tableId"],
             "date": data["date"],
             "time": data["time"]
             }
