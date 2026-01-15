@@ -8,7 +8,7 @@ import asyncio
 
 load_dotenv()
 
-TOKEN = os.getenv("TOKEN_LOCAL")
+TOKEN = os.getenv("TOKEN")
 
 
 
