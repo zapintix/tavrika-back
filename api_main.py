@@ -26,7 +26,6 @@ class ReservationTableResponse(BaseModel):
 
 @app.post("/api/reservations/table")
 async def get_reserved_tables(req: ReservationTableRequest):
-    print("Гойда")
     day_reservations = await bot.fetch_day_reservations(req.date)
 
     requested_time = datetime.fromisoformat(
@@ -42,7 +41,6 @@ async def get_reserved_tables(req: ReservationTableRequest):
 
         if start <= requested_time < end:
             reserved_table_ids.update(r.get("tableIds", []))
-        print("reservedTableIds:", list(reserved_table_ids))
     return {
         "reservedTableIds": list(reserved_table_ids)
     }

@@ -9,6 +9,7 @@ import json, requests, urllib.parse
 from redis_config.redis_helpers import get_user_data, set_user_data
 from admin.comands import is_admin, admin_start, get_all_reservations, cancel_reservation
 from iiko_token.update_token import update_iiko_token
+from bot.reminder_mes import schedule_reservation_reminders
 from dotenv import load_dotenv
 from datetime import date
 
@@ -39,7 +40,6 @@ class ReservationBot:
         response = requests.post(self.IIKO_API_URL, json=payload, headers=headers)
         response.raise_for_status()
         data = response.json()
-        print(data)
         tables_info = []
         for section in data.get("restaurantSections", []):
             section_info = {
@@ -121,7 +121,7 @@ class ReservationBot:
         await self.delete_msg(update, context)
 
         keyboard = [
-            [InlineKeyboardButton("🍽 Создать бронь", callback_data="create_reservation")],
+            [InlineKeyboardButton("🍽 Забронировать стол", callback_data="create_reservation")],
             [InlineKeyboardButton("📋 Мои брони", callback_data="my_reservations")]
         ]
         markup = InlineKeyboardMarkup(keyboard)
@@ -320,14 +320,15 @@ class ReservationBot:
 
         await self.delete_msg(update, context)
 
-        await redis_helpers.save_reservation({
+        reservation_data = {
             "user_id": user_id,
             "name":data["name"],
             "phone": data["phone"],
             "table": data["table"],
             "date": data["date"],
             "time": data["time"]
-            })
+            }
+        await redis_helpers.save_reservation(reservation_data)
 
         await query.message.reply_text(
                     f"✅ Заявка создана:\n"
@@ -417,9 +418,6 @@ class ReservationBot:
         reservations = await get_all_reservations()
 
         user_reservations = [r for r in reservations if (r["user_id"] == user_id and r["status"] == "CONFIRMED")]
-        user_reservations2 = [r for r in reservations if r["user_id"] == user_id]
-        print(user_reservations2)
-        print(user_reservations)
         keyboard1 = []
         keyboard1.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_start")])
         if not user_reservations:

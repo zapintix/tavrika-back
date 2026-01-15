@@ -5,6 +5,7 @@ from telegram.ext import ContextTypes
 from redis_config import redis_client as redis
 from redis_config.redis_helpers import get_reservation_by_id,update_reservation_status,  delete_reservation_by_id, get_user_data, get_iikoId_by_id
 from iiko_token.update_token import update_iiko_token
+from bot.reminder_mes import schedule_reservation_reminders
 import json, os, httpx, uuid
 from datetime import datetime
 from dotenv import load_dotenv
@@ -44,12 +45,14 @@ async def admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def update_admin_list(application, view):
         reservations = await get_all_reservations()
+        not_confimed_reservations = [r for r in reservations if r["status"] != "CONFIRMED"]
+
         per_page = 5
         page = view["page"]
 
         start = page * per_page
         end = start + per_page
-        page_items = reservations[start:end]
+        page_items = not_confimed_reservations[start:end]
 
         keyboard = []
         for index, r in enumerate(page_items, start=start):
@@ -64,7 +67,7 @@ async def update_admin_list(application, view):
         if not page_items:
             keyboard.append([InlineKeyboardButton("❌ Заявок нет", callback_data="noop")])
 
-        total_pages = (len(reservations) + per_page - 1) // per_page
+        total_pages = (len(not_confimed_reservations) + per_page - 1) // per_page
         pagination = build_pagination_keyboard(page, total_pages)
         if pagination.inline_keyboard:
             keyboard.extend(pagination.inline_keyboard)
@@ -100,11 +103,12 @@ async def admin_pagination_callback(update: Update, context: ContextTypes.DEFAUL
         page = int(query.data.split(":")[1])
 
     reservations = await get_all_reservations()
+    not_confimed_reservations = [r for r in reservations if r["status"] != "CONFIRMED"]
     per_page = 5
 
     start = page * per_page
     end = start + per_page
-    page_items = reservations[start:end]
+    page_items = not_confimed_reservations[start:end]
 
 
     keyboard = []
@@ -118,12 +122,11 @@ async def admin_pagination_callback(update: Update, context: ContextTypes.DEFAUL
         ])
 
     if not page_items:
-            print(page_items)
             keyboard.append([
         InlineKeyboardButton("❌ Заявок нет", callback_data="noop")
     ])
             
-    total_pages = (len(reservations) + per_page - 1) // per_page
+    total_pages = (len(not_confimed_reservations) + per_page - 1) // per_page
     pagination = build_pagination_keyboard(page, total_pages)
 
     if pagination.inline_keyboard:
@@ -142,13 +145,14 @@ async def admin_pagination_callback(update: Update, context: ContextTypes.DEFAUL
         "page": page
     }
 
-    print("Данные страницы админа: ",view)
 
 async def view_reservation(update: Update, context: ContextTypes.DEFAULT_TYPE, reservation_id, index):
     reservations = await get_all_reservations()
-    total = len(reservations)
+    not_confimed_reservations = [r for r in reservations if r["status"] != "CONFIRMED"]
 
-    data = reservations[index]
+    total = len(not_confimed_reservations)
+
+    data = not_confimed_reservations[index]
 
     text = (
         f"📋 Заявка {index + 1} из {total}\n\n"
@@ -161,7 +165,7 @@ async def view_reservation(update: Update, context: ContextTypes.DEFAULT_TYPE, r
     nav_buttons = []
 
     if index > 0:
-        prev = reservations[index - 1]
+        prev = not_confimed_reservations[index - 1]
         nav_buttons.append(
             InlineKeyboardButton("⬅️", callback_data=f"reservation:{prev['id']}:{index-1}")
         )
@@ -171,7 +175,7 @@ async def view_reservation(update: Update, context: ContextTypes.DEFAULT_TYPE, r
     )
 
     if index < total - 1:
-        next_ = reservations[index + 1]
+        next_ = not_confimed_reservations[index + 1]
         nav_buttons.append(
             InlineKeyboardButton("➡️", callback_data=f"reservation:{next_['id']}:{index+1}")
         )
@@ -292,17 +296,20 @@ async def handle_reservation_decision(update: Update, context: ContextTypes.DEFA
             f"🍽 Стол: {reservation['table']}"
         )
 
-        reservation_result = await create_reserve({
+        reservation_data = {
         "name": data["name"],
         "phone": data["phone"],
         "table_id": data["tableId"],
         "date": data["date"],
         "time": data["time"]
-        })
+        }
 
-        print(reservation_result)
+        reservation_result = await create_reserve(reservation_data)
+
         iiko_id = reservation_result["iiko"]["reserveInfo"]["id"]
         await update_reservation_status(reservation_id, "CONFIRMED", iiko_id)
+        schedule_reservation_reminders(context, user_id, reservation_data)
+
 
 
 

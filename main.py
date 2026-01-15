@@ -2,19 +2,23 @@ from telegram.ext import CommandHandler, MessageHandler, ApplicationBuilder, fil
 from bot.comands import ReservationBot
 from dotenv import load_dotenv
 from redis_config import redis_helpers
+from bot.reminder_mes import scheduler
 import os
 import asyncio
 
 load_dotenv()
 
-TOKEN = os.getenv("TOKEN")
+TOKEN = os.getenv("TOKEN_LOCAL")
 
 
 
 def main():
     bot = None
-
+    
     async def post_init(app):
+        nonlocal bot
+        bot = ReservationBot(app)
+        scheduler.start()
         asyncio.create_task(
             redis_helpers.listen_new_reservations(
                 bot.new_reservation_notification
@@ -29,7 +33,7 @@ def main():
     )
 
     bot = ReservationBot(app)
-    
+
     app.add_handler(CommandHandler("start", bot.start))
     app.add_handler(CallbackQueryHandler(bot.callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.CONTACT, bot.text_handler))
