@@ -20,7 +20,6 @@ def schedule_reservation_reminders(context, user_id, reservation):
 
     reminder_1h = reservation_time - timedelta(hours=1)
     if reminder_1h > datetime.now():
-        print(reminder_1h)
         scheduler.add_job(
             send_reminder,
             trigger="date",
@@ -29,9 +28,8 @@ def schedule_reservation_reminders(context, user_id, reservation):
             misfire_grace_time=60 
         )
 
-    reminder_30m = reservation_time - timedelta(minutes=40)
+    reminder_30m = reservation_time - timedelta(minutes=30)
     if reminder_30m > datetime.now():
-        print(reminder_30m)
         scheduler.add_job(
             send_reminder,
             trigger="date",
