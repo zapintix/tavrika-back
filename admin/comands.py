@@ -232,8 +232,9 @@ async def create_reserve(reservation_data: dict):
     return {"status": "created", "reserve_id": reserve_id, "iiko": r.json()}   
 
 async def cancel_reservation(reservation_id: str):
+    print("Удаление заявки № ", reservation_id)
     iiko_id = await get_iikoId_by_id(reservation_id)
-
+    print("IIKO Id: ",iiko_id)
     if not iiko_id:
         raise ValueError("iiko reserveId not found for this reservation")
 
@@ -250,18 +251,20 @@ async def cancel_reservation(reservation_id: str):
         "Content-Type": "application/json"
     }
 
+    print("ЙЙООООУУУ")
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(
             os.getenv("IIKO_CANCEL_URL"),
             json=body,
             headers=headers
         )
-
+        print(1111111111)
         if resp.status_code == 400:
             return {
                 "success": False,
                 "reason": resp.text
             }
+        print(2222222222222222)
 
         resp.raise_for_status()
         return {
@@ -284,7 +287,7 @@ async def handle_reservation_decision(update: Update, context: ContextTypes.DEFA
         user_text = (
             "✅ Ваша заявка подтверждена!\n\n"
             f"📅 {reservation['date']} {reservation['time']}\n"
-            f"🍽 Стол: {reservation['table']}"
+            f"🍽 Стол: {reservation['table']}\n"
             f"👥 Кол-во гостей: {reservation['guests']}\n"
         )
 
@@ -303,13 +306,10 @@ async def handle_reservation_decision(update: Update, context: ContextTypes.DEFA
         await update_reservation_status(reservation_id, "CONFIRMED", iiko_id)
         schedule_reservation_reminders(context, user_id, reservation_data)
 
-
-
-
     else:
         user_text = (
             "❌ К сожалению, заявка была отклонена.\n"
-            "Попробуйте выбрать другое время."
+            "Попробуйте выбрать другое время или другой стол."
         )
         await delete_reservation_by_id(reservation_id)
         
