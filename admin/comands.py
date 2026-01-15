@@ -138,14 +138,6 @@ async def admin_pagination_callback(update: Update, context: ContextTypes.DEFAUL
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-    admin_id = query.from_user.id
-    view = context.application.bot_data[f"admin_view:{admin_id}"] = {
-        "chat_id": query.message.chat_id,
-        "message_id": query.message.message_id,
-        "page": page
-    }
-
-
 async def view_reservation(update: Update, context: ContextTypes.DEFAULT_TYPE, reservation_id, index):
     reservations = await get_all_reservations()
     not_confimed_reservations = [r for r in reservations if r["status"] != "CONFIRMED"]

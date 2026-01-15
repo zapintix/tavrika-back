@@ -6,7 +6,7 @@ from telegram.ext import ContextTypes
 from redis_config import redis_helpers
 from admin.comands import admin_pagination_callback, view_reservation, handle_reservation_decision, update_admin_list
 import json, requests, urllib.parse
-from redis_config.redis_helpers import get_user_data, set_user_data
+from redis_config.redis_helpers import get_user_data, set_user_data, get_reservation_by_id
 from admin.comands import is_admin, admin_start, get_all_reservations, cancel_reservation
 from iiko_token.update_token import update_iiko_token
 from dotenv import load_dotenv
@@ -213,6 +213,30 @@ class ReservationBot:
             text="⚠️ Вы точно хотите удалить эту бронь?",
             reply_markup=markup
         )
+
+
+    async def view_detail_reservation(self, update, context, res_id: str):
+        print(res_id)
+        data = await get_reservation_by_id(res_id)
+        query = update.callback_query
+        await query.answer()
+        keyboard = [
+            [InlineKeyboardButton("❌ Отменить заявку", callback_data=f"cancel:{res_id}")],
+            [InlineKeyboardButton("⬅️ Назад", callback_data="my_reservations")]
+        ]
+        text = (
+            f"👤 {data['name']}\n"
+            f"📞 {data['phone']}\n"
+            f"👥{data['guests']} гос.\n"
+            f"📅 {data['date']} {data['time']}\n"
+            f"🍽 Стол {data['table']}\n"
+        )
+        await update.callback_query.edit_message_text(
+            text=text,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+        
     # -------------------- Callback --------------------
     async def callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -269,6 +293,11 @@ class ReservationBot:
 
         elif action == "back_to_start":
             await self.start(update, context)
+
+        elif action.startswith("detail_reservation"):
+            _, res_id = action.split(":")
+            await self.view_detail_reservation(update, context, res_id)
+
 
     async def edit_phone(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -439,8 +468,7 @@ class ReservationBot:
 
         for r in user_reservations:
             button_text = f"📅 {r['date']} {r['time']} 🍽 Стол {r['table']}"
-            keyboard.append([InlineKeyboardButton(button_text, callback_data=f"noop")])
-            keyboard.append([InlineKeyboardButton("❌ Отменить", callback_data=f"cancel:{r['id']}")])
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=f"detail_reservation:{r['id']}")])
         
         keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_start")])
 
