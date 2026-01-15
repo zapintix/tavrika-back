@@ -9,7 +9,6 @@ import json, requests, urllib.parse
 from redis_config.redis_helpers import get_user_data, set_user_data
 from admin.comands import is_admin, admin_start, get_all_reservations, cancel_reservation
 from iiko_token.update_token import update_iiko_token
-from bot.reminder_mes import schedule_reservation_reminders
 from dotenv import load_dotenv
 from datetime import date
 
@@ -156,7 +155,7 @@ class ReservationBot:
         )
         
         delete_msg2 = await message.reply_text(
-            "Выберите, что хотите указать:",
+            "Пожалуйста, укажите:",
             reply_markup=self.build_keyboard(data)
         )
 
@@ -165,15 +164,18 @@ class ReservationBot:
 
     # -------------------- Клавиатуры --------------------
     def build_keyboard(self, data: dict) -> InlineKeyboardMarkup:
-        phone = data.get("phone", "❌ не указан")
-        table = data.get("table", "❌ не указан")
+        phone = data.get("phone", "Укажите номер телефона")
+        if "table" in data:
+            table = f"Ваш стол: № {data['table']}"
+        else:
+            table = "Выберите стол"
 
         keyboard = [
-            [InlineKeyboardButton(f"📱 Номер телефона: {phone}", callback_data="edit_phone")],
-            [InlineKeyboardButton(f"🍽 Выбрать стол: {table}", callback_data="edit_table")]
+            [InlineKeyboardButton(f"📱 {phone}", callback_data="edit_phone")],
+            [InlineKeyboardButton(f"🍽 {table}", callback_data="edit_table")]
         ]
 
-        if phone != "❌ не указан" and table != "❌ не указан":
+        if phone != "Укажите номер телефона" and table != "Выберите стол":
             keyboard.append([InlineKeyboardButton("✅ Подтвердить резервацию", callback_data="continue")])
 
         return InlineKeyboardMarkup(keyboard)
@@ -324,6 +326,7 @@ class ReservationBot:
             "user_id": user_id,
             "name":data["name"],
             "phone": data["phone"],
+            "guests": data["guests"],
             "table": data["table"],
             "tableId":data["tableId"],
             "date": data["date"],
@@ -335,6 +338,7 @@ class ReservationBot:
                     f"✅ Заявка создана:\n"
                     f"📞 Телефон: {data['phone']}\n"
                     f"🍽 Стол: {data['table']}\n"
+                    f"👥 Кол-во гостей: {data['guests']}\n"
                     f"📅 Дата: {data['date']}\n"
                     f"🕑 Время: {data['time']}\n\n"
                     f"Дождитесь ответа администратора!"
@@ -359,7 +363,7 @@ class ReservationBot:
             reply_markup=ReplyKeyboardRemove())
 
         delete_msg2 = await update.message.reply_text(
-            "Выберите, что хотите указать:",
+            "Пожалуйста, укажите:",
             reply_markup=self.build_keyboard(data)
         )
         context.user_data['delete_msg'] = [delete_msg1.message_id, delete_msg2.message_id]
@@ -378,6 +382,7 @@ class ReservationBot:
         if payload.get("action") == "create_reservation":
             data["tableId"] = payload.get("tableId")
             data["table"] = payload.get("tableNumber")
+            data["guests"] = payload.get("guests")
             data["time"] = payload.get("time")
             data["date"] = payload.get("date")
             await set_user_data(user_id, data)
@@ -388,7 +393,7 @@ class ReservationBot:
     )
 
         delete_msg2 = await update.message.reply_text(
-            "Выберите, что хотите указать:",
+            "Пожалуйста, укажите:",
             reply_markup=self.build_keyboard(data)
         )
         context.user_data['delete_msg'] = [delete_msg1.message_id, delete_msg2.message_id]

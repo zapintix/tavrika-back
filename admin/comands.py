@@ -158,6 +158,7 @@ async def view_reservation(update: Update, context: ContextTypes.DEFAULT_TYPE, r
         f"📋 Заявка {index + 1} из {total}\n\n"
         f"👤 {data['name']}\n"
         f"📞 {data['phone']}\n"
+        f"👥{data['guests']} гос.\n"
         f"📅 {data['date']} {data['time']}\n"
         f"🍽 Стол {data['table']}\n"
     )
@@ -216,7 +217,7 @@ async def create_reserve(reservation_data: dict):
             "type": "one-time"
         },
         "phone": format_phone(reservation_data["phone"]),
-        "guestsCount": reservation_data.get("guests_count", 2),
+        "guestsCount": reservation_data.get("guests", 2),
         "comment": "TEST запрос",
         "durationInMinutes": 120,
         "shouldRemind": True,
@@ -292,12 +293,14 @@ async def handle_reservation_decision(update: Update, context: ContextTypes.DEFA
             "✅ Ваша заявка подтверждена!\n\n"
             f"📅 {reservation['date']} {reservation['time']}\n"
             f"🍽 Стол: {reservation['table']}"
+            f"👥 Кол-во гостей: {reservation['guests']}\n"
         )
 
         reservation_data = {
         "name": reservation["name"],
         "phone": reservation["phone"],
         "table_id": reservation["tableId"],
+        "guests":reservation["guests"],
         "date": reservation["date"],
         "time": reservation["time"]
         }

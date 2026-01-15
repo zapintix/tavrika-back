@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from telegram import Update
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.jobstores.redis import RedisJobStore
 import asyncio
 
 scheduler = AsyncIOScheduler()
