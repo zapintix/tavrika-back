@@ -125,11 +125,10 @@ class ReservationBot:
         ]
         markup = InlineKeyboardMarkup(keyboard)
 
-        # Берём сообщение из update.message или update.callback_query.message
         message = update.message or update.callback_query.message
 
         text = await message.reply_text(
-            "Добро пожаловать! Выберите действие:",
+            "Добро пожаловать в Таврику. Что бы вы хотели?",
             reply_markup=markup
         )
         context.user_data['delete_msg'] = [text.message_id]
@@ -147,7 +146,6 @@ class ReservationBot:
         await self.delete_msg(update, context)
 
         delete_msg1 = await message.reply_text(
-            "Добро пожаловать!\n\n"
             "Я помогу вам зарезервировать стол.\n"
             "Пожалуйста, заполните данные ниже 👇"
         )
@@ -176,7 +174,7 @@ class ReservationBot:
         ]
 
         if phone != "Укажите номер телефона" and table != "Выберите стол" and name != "Укажите ваше имя":
-            keyboard.append([InlineKeyboardButton("✅ Подтвердить резервацию", callback_data="continue")])
+            keyboard.append([InlineKeyboardButton("✅ Подтвердить бронь", callback_data="continue")])
 
         return InlineKeyboardMarkup(keyboard)
 
