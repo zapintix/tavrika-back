@@ -28,12 +28,13 @@ def schedule_reservation_reminders(context, user_id, reservation):
             misfire_grace_time=60 
         )
 
+    run_in_2_min = datetime.now() + timedelta(minutes=3)
     reminder_30m = reservation_time - timedelta(minutes=30)
     if reminder_30m > datetime.now():
         scheduler.add_job(
             send_reminder,
             trigger="date",
-            run_date=reminder_30m,
+            run_date=run_in_2_min,
             args=[context, user_id, reservation],
             misfire_grace_time=60
         )

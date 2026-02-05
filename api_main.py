@@ -33,14 +33,17 @@ async def get_reserved_tables(req: ReservationTableRequest):
     )
 
     reserved_table_ids: set[str] = set()
+    if len(day_reservations) != 0:
+        for r in day_reservations:
+            print(r)
+            start = datetime.fromisoformat(r["estimatedStartTime"])
+            duration = r.get("durationInMinutes", 120) 
+            end = start + timedelta(minutes=duration)
 
-    for r in day_reservations:
-        start = datetime.fromisoformat(r["estimatedStartTime"])
-        duration = r.get("durationInMinutes", 120) 
-        end = start + timedelta(minutes=duration)
+            if start <= requested_time < end:
+                reserved_table_ids.update(r.get("tableIds", []))
+            print(reserved_table_ids)
 
-        if start <= requested_time < end:
-            reserved_table_ids.update(r.get("tableIds", []))
     return {
         "reservedTableIds": list(reserved_table_ids)
     }
