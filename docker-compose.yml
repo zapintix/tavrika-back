@@ -3,7 +3,6 @@ version: "3.9"
 services:
   redis:
     image: redis:7-alpine
-    container_name: reservation-redis
     ports:
       - "6379:6379"
     volumes:
@@ -14,8 +13,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: Dockerfile.api
-    container_name: reservation-api
+      dockerfile: dockerfile
     env_file:
       - .env
     depends_on:
@@ -30,8 +28,7 @@ services:
   bot:
     build:
       context: .
-      dockerfile: Dockerfile.bot
-    container_name: reservation-bot
+      dockerfile: dockerfile
     env_file:
       - .env
     depends_on:
@@ -46,3 +43,4 @@ volumes:
 
 networks:
   tavrika:
+    external: true
