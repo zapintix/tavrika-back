@@ -227,7 +227,11 @@ async def create_reserve(reservation_data: dict):
         r = await client.post(os.getenv("IIKO_CREATE_URL"), headers=headers, json=body)
 
     if r.status_code != 200:
-        return {"Status": "error", "iiko_response": r.text}
+        return {
+    "status": "error",
+    "error": r.text
+}
+
 
     return {"status": "created", "reserve_id": reserve_id, "iiko": r.json()}   
 
@@ -287,9 +291,11 @@ async def handle_reservation_decision(update: Update, context: ContextTypes.DEFA
         )
 
         reservation_data = {
+        "id":reservation["id"],
         "name": reservation["name"],
         "phone": reservation["phone"],
         "table_id": reservation["tableId"],
+        "table": reservation["table"],
         "guests":reservation["guests"],
         "date": reservation["date"],
         "time": reservation["time"]
@@ -297,13 +303,22 @@ async def handle_reservation_decision(update: Update, context: ContextTypes.DEFA
 
         reservation_result = await create_reserve(reservation_data)
 
+        if reservation_result["status"] != "created":
+            await query.edit_message_text(
+                "❌ Ошибка при создании брони в iiko"
+            )
+            return
+
         iiko_id = reservation_result["iiko"]["reserveInfo"]["id"]
         await update_reservation_status(reservation_id, "CONFIRMED", iiko_id)
-        schedule_reservation_reminders(context, user_id, reservation_data)
+        schedule_reservation_reminders(context, reservation)
 
     else:
         user_text = (
-            "❌ К сожалению, заявка была отклонена.\n"
+            "❌ К сожалению, ваша заявка отклонена.\n"
+            f"📅 {reservation['date']} {reservation['time']}\n"
+            f"🍽 Стол: {reservation['table']}\n"
+            f"👥 Кол-во гостей: {reservation['guests']}\n\n" 
             "Попробуйте выбрать другое время или другой стол."
         )
         await delete_reservation_by_id(reservation_id)
@@ -311,3 +326,18 @@ async def handle_reservation_decision(update: Update, context: ContextTypes.DEFA
     await context.bot.send_message(chat_id=user_id, text=user_text)
 
     await admin_pagination_callback(update, context)
+
+async def notify_admin_to_call(context,reservation):
+    admin_ids = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x]
+
+    text = (
+        "📞 Гость не подтвердил бронь!\n\n"
+        f"👤 {reservation['name']}\n"
+        f"📞 {reservation['phone']}\n"
+        f"📅 {reservation['date']} {reservation['time']}\n"
+        f"🍽 Стол {reservation['table']}\n"
+        f"⚠️ Статус: {reservation['confirmation_status']}"
+    )
+
+    for admin_id in admin_ids:
+        await context.bot.send_message(chat_id=admin_id, text=text)

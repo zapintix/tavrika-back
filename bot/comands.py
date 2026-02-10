@@ -4,9 +4,9 @@ from telegram import (
 )
 from telegram.ext import ContextTypes
 from redis_config import redis_helpers
-from admin.comands import admin_pagination_callback, view_reservation, handle_reservation_decision, update_admin_list
+from admin.comands import admin_pagination_callback, view_reservation, handle_reservation_decision, update_admin_list, notify_admin_to_call
 import json, requests, urllib.parse
-from redis_config.redis_helpers import get_user_data, set_user_data, get_reservation_by_id
+from redis_config.redis_helpers import get_user_data, set_user_data, get_reservation_by_id, update_reservation_confirmation
 from admin.comands import is_admin, admin_start, get_all_reservations, cancel_reservation
 from iiko_token.update_token import update_iiko_token
 from dotenv import load_dotenv
@@ -133,13 +133,30 @@ class ReservationBot:
         )
         context.user_data['delete_msg'] = [text.message_id]
 
-
-    async def send_welcome_messages(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def resolve_booking_target(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await self.delete_msg(update, context)
+        message = update.message or update.callback_query.message
+        msg = await message.reply_text(
+            "На кого бронируем стол?",
+            reply_markup = self.resolve_booking()
+        )
+        context.user_data['delete_msg'] = [msg.message_id]
+    
+    async def send_welcome_messages(self, update: Update, context: ContextTypes.DEFAULT_TYPE, other_people):
         user_id = update.effective_user.id
 
         data = await get_user_data(user_id)
         data.clear()
+        data["for_another_person"] = other_people
+
+        
+        
+        if other_people == False:
+            tg_user = update.effective_user
+            data["name"] = tg_user.first_name
+
         await set_user_data(user_id, data)
+
 
         message = update.message or update.callback_query.message
 
@@ -160,23 +177,26 @@ class ReservationBot:
 
     # -------------------- Клавиатуры --------------------
     def build_keyboard(self, data: dict) -> InlineKeyboardMarkup:
-        name = data.get("name", "Укажите ваше имя")
+        for_another_person = data.get("for_another_person", False)
+
+        keyboard = []
+
+        if for_another_person:
+            name = data.get("name", "Укажите имя гостя")
+            keyboard.append([InlineKeyboardButton(f"👤 {name}", callback_data="edit_name")])
+
         phone = data.get("phone", "Укажите номер телефона")
-        if "table" in data:
-            table = f"Ваш стол: № {data['table']}"
-        else:
-            table = "Выберите стол"
+        table = f"Ваш стол: № {data['table']}" if "table" in data else "Выберите стол"
 
-        keyboard = [
-            [InlineKeyboardButton(f"👤 {name}", callback_data="edit_name")],
-            [InlineKeyboardButton(f"📱 {phone}", callback_data="edit_phone")],
-            [InlineKeyboardButton(f"🍽 {table}", callback_data="edit_table")]
-        ]
+        keyboard.append([InlineKeyboardButton(f"📱 {phone}", callback_data="edit_phone")])
+        keyboard.append([InlineKeyboardButton(f"🍽 {table}", callback_data="edit_table")])
 
-        if phone != "Укажите номер телефона" and table != "Выберите стол" and name != "Укажите ваше имя":
-            keyboard.append([InlineKeyboardButton("✅ Подтвердить бронь", callback_data="continue")])
+        if phone != "Укажите номер телефона" and table != "Выберите стол":
+            if not for_another_person or data.get("name"):
+                keyboard.append([InlineKeyboardButton("✅ Подтвердить бронь", callback_data="continue")])
 
         return InlineKeyboardMarkup(keyboard)
+
 
     def phone_keyboard(self) -> ReplyKeyboardMarkup:
         return ReplyKeyboardMarkup(
@@ -195,6 +215,16 @@ class ReservationBot:
         ]
         return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
     
+    def resolve_booking(self):
+        keyboard = [
+            [
+                InlineKeyboardButton("На себя", callback_data="me"),
+            ],
+            [
+                InlineKeyboardButton("На другого человека", callback_data="other_people")
+            ]
+        ]
+        return InlineKeyboardMarkup(keyboard)
 
     async def ask_cancel_confirmation(self, update, context, res_id: str):
         keyboard = [
@@ -214,7 +244,6 @@ class ReservationBot:
 
 
     async def view_detail_reservation(self, update, context, res_id: str):
-        print(res_id)
         data = await get_reservation_by_id(res_id)
         query = update.callback_query
         await query.answer()
@@ -264,7 +293,7 @@ class ReservationBot:
         # Для обычного пользователя
         action = query.data
         if action == "create_reservation":
-            await self.send_welcome_messages(update, context)
+            await self.resolve_booking_target(update, context)
         elif action == "edit_phone":
                 await self.edit_phone(update, context)
         elif action == "edit_name":
@@ -275,7 +304,10 @@ class ReservationBot:
                 await self.confirm_reservation(update, query, context)
         elif action == "my_reservations":
              await self.show_user_reservations(update, context)
-
+        elif action == "me":
+             await self.send_welcome_messages(update, context, other_people = False)
+        elif action == "other_people":
+             await self.send_welcome_messages(update, context, other_people = True)
         elif action.startswith("cancel:"):
             _, res_id = action.split(":")
             await self.ask_cancel_confirmation(update, context, res_id)
@@ -297,6 +329,20 @@ class ReservationBot:
         elif action.startswith("detail_reservation"):
             _, res_id = action.split(":")
             await self.view_detail_reservation(update, context, res_id)
+        
+        elif action.startswith("confirm_yes:"):
+            _, res_id = action.split(":")
+            await update_reservation_confirmation(res_id, "CONFIRMED")
+            await query.edit_message_text("✅ Хорошо, ждём вас 🙌")
+
+        elif action.startswith("confirm_no:"):
+            _, res_id = action.split(":")
+            await update_reservation_confirmation(res_id, "DECLINED")
+            await query.edit_message_text("❌ Поняли, спасибо что предупредили")
+
+            reservation = await get_reservation_by_id(res_id)
+            await notify_admin_to_call(context, reservation)
+
 
 
     async def edit_phone(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -306,22 +352,39 @@ class ReservationBot:
         await self.delete_msg(update, context)
         
         data = await get_user_data(user_id)
-        data["step"] = "phone"
+
+        other_people = data.get("for_another_person")
+
+        print(other_people)
+        if other_people:
+            data["step"] = "nophone"
+        else:
+            data["step"] = "phone"    
+
+        
+        print(data["step"])
         await set_user_data(user_id, data)
 
-        delete_msg = await context.bot.send_message(
-            chat_id=query.from_user.id,
-            text="Укажите ваш номер телефона, нажав на кнопку ⬇️",
-            reply_markup=self.phone_keyboard()
-            )
-        
-        context.user_data['delete_msg'] = delete_msg.message_id
+        if not other_people:
+            delete_msg = await context.bot.send_message(
+                chat_id=query.from_user.id,
+                text="Укажите ваш номер телефона, нажав на кнопку ⬇️",
+                reply_markup=self.phone_keyboard()
+                )
+            
+            context.user_data['delete_msg'] = delete_msg.message_id
+        else:
+            delete_msg = await context.bot.send_message(
+                chat_id=query.from_user.id,
+                text="Укажите номер телефона ⬇️")
+            
+            context.user_data['delete_msg'] = delete_msg.message_id
     
     async def edit_name(self, update:Update, context: ContextTypes):
         query = update.callback_query
         user_id = query.from_user.id
 
-        await self.delete_msg(update, context   )
+        await self.delete_msg(update, context)
         
         data = await get_user_data(user_id)
         data["step"] = "name"
@@ -329,7 +392,7 @@ class ReservationBot:
 
         msg = await context.bot.send_message(
             chat_id=user_id,
-            text="Введите ваше имя ✍️"
+            text="Введите имя... ✍️"
         )
         context.user_data['delete_msg'] = msg.message_id
 
@@ -468,7 +531,15 @@ class ReservationBot:
 
             context.user_data['delete_msg'] = [msg1.message_id, msg2.message_id]
             return
-
+        if step == "nophone":
+            phone = update.message.text.strip()
+            data["phone"] = phone
+            await set_user_data(user_id, data)
+            msg1 = await update.message.reply_text("Телефон сохранён ✅")
+            msg2 = await update.message.reply_text(
+                "Пожалуйста, укажите:",
+                reply_markup=self.build_keyboard(data)
+            )
         if step == "phone":
             await update.message.reply_text(
                 "Пожалуйста, подтвердите номер через кнопку 📱",
@@ -476,7 +547,7 @@ class ReservationBot:
             )
             return
 
-        data.pop("step")
+        data.pop("step", None)
         await set_user_data(user_id, data)
     
     async def show_user_reservations(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

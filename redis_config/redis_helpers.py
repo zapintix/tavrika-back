@@ -47,7 +47,9 @@ async def save_reservation(data:dict)->str:
         "tableId":data["tableId"],
         "date": data["date"],
         "time": data["time"],
-        "status": "PENDING"
+        "status": "PENDING",
+        "confirmation_status": "WAITING",  
+        "confirmation_message_id": None
     }
     
     await redis.redis_client.set(reservation_key(res_id), json.dumps(reserv))
@@ -89,5 +91,22 @@ async def update_reservation_status(res_id:str, new_status:str, id_iiko: str):
 
     if id_iiko is not None:
         reservation["id_iiko"] = id_iiko
+    await redis.redis_client.set(key, json.dumps(reservation))
+    return True
+
+async def update_reservation_confirmation(res_id: str, status: str, message_id: int | None = None):
+    key = reservation_key(res_id)
+
+    data = await redis.redis_client.get(key)
+    if not data:
+        return False
+
+    reservation = json.loads(data)
+
+    reservation["confirmation_status"] = status
+
+    if message_id is not None:
+        reservation["confirmation_message_id"] = message_id
+
     await redis.redis_client.set(key, json.dumps(reservation))
     return True
