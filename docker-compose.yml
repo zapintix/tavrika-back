@@ -21,7 +21,7 @@ services:
       - ./certs:/app/certs
     networks:
       - tavrika
-    command: uvicorn api_main:app --host 0.0.0.0 --port 8000  --ssl-keyfile=/app/key.pem --ssl-certfile=/app/cert.pem
+    command: uvicorn api_main:app --host 0.0.0.0 --port 8000  --ssl-keyfile=/app/certs/key.pem --ssl-certfile=/app/certs/cert.pem
 
   bot:
     build:
