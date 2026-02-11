@@ -338,6 +338,7 @@ class ReservationBot:
         elif action.startswith("confirm_no:"):
             _, res_id = action.split(":")
             await update_reservation_confirmation(res_id, "DECLINED")
+            await cancel_reservation(res_id)
             await query.edit_message_text("❌ Поняли, спасибо что предупредили")
 
             reservation = await get_reservation_by_id(res_id)
