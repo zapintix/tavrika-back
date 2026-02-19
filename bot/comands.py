@@ -470,6 +470,8 @@ class ReservationBot:
         
         user_id = update.effective_user.id
 
+        await self.delete_msg(update, context)
+
         data = await get_user_data(user_id)
 
         data["phone"] = contact.phone_number
@@ -489,6 +491,8 @@ class ReservationBot:
 
     async def web_app_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
+
+        await self.delete_msg(update, context)
 
         data = await get_user_data(user_id)
 
@@ -530,6 +534,8 @@ class ReservationBot:
                 await update.message.reply_text("Имя слишком короткое, попробуйте ещё раз 🙏")
                 return
             
+            await self.delete_msg(update, context)
+
             data["name"] = name
             data.pop("step", None)
             await set_user_data(user_id, data)
@@ -544,6 +550,9 @@ class ReservationBot:
             return
         if step == "nophone":
             phone = update.message.text.strip()
+
+            await self.delete_msg(update, context)
+
             data["phone"] = phone
             await set_user_data(user_id, data)
             msg1 = await update.message.reply_text("Телефон сохранён ✅")
@@ -566,6 +575,8 @@ class ReservationBot:
         query = update.callback_query
         await query.answer()
         user_id = query.from_user.id
+
+        await self.delete_msg(update, context)
 
         reservations = await get_all_reservations()
         
@@ -597,6 +608,9 @@ class ReservationBot:
         context.user_data['delete_msg'] = [message.message_id]
 
     async def reservations(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+        await self.delete_msg(update, context)
+        
         keyboard = [
             [
                 InlineKeyboardButton("✅ Подтверждённые брони", callback_data="show_reservations:CONFIRMED"),
