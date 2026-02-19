@@ -117,4 +117,12 @@ async def get_status_by_id(res_id: str):
         return None
     
     reservation = json.loads(data)
+    return reservation["status"]
+
+async def get_confirmation_status_by_id(res_id: str):
+    data = await redis.redis_client.get(reservation_key(res_id))
+    if not data:
+        return None
+    
+    reservation = json.loads(data)
     return reservation["confirmation_status"]
