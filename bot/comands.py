@@ -98,8 +98,12 @@ class ReservationBot:
 
     async def delete_msg(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         msgs = context.user_data.get("delete_msg", [])
+        
         if not isinstance(msgs, list):
-            msgs = [msgs]
+            msgs = [msgs] if msgs else []
+        
+        msgs = [msg_id for msg_id in msgs if isinstance(msg_id, int)]
+        
         for msg_id in msgs:
             try:
                 await context.bot.delete_message(
@@ -108,6 +112,8 @@ class ReservationBot:
                 )
             except Exception as e:
                 print(f"Не удалось удалить сообщение {msg_id}: {e}")
+        
+        context.user_data['delete_msg'] = []
 
     # -------------------- Start --------------------
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -227,6 +233,7 @@ class ReservationBot:
         return InlineKeyboardMarkup(keyboard)
 
     async def ask_cancel_confirmation(self, update, context, res_id: str):
+        await self.delete_msg(update, context)
         keyboard = [
             [
                 InlineKeyboardButton("✅ Да, удалить", callback_data=f"confirm_cancel:{res_id}"),
@@ -244,6 +251,8 @@ class ReservationBot:
 
 
     async def view_detail_reservation(self, update, context, res_id: str):
+        await self.delete_msg(update, context)
+
         data = await get_reservation_by_id(res_id)
         query = update.callback_query
         await query.answer()
@@ -292,6 +301,12 @@ class ReservationBot:
 
         # Для обычного пользователя
         action = query.data
+        
+        if action.startswith("confirm_cancel:") or action.startswith("deny_cancel:") or action.startswith("confirm_yes:") or action.startswith("confirm_no:"):
+            pass
+        else:
+            await self.delete_msg(update, context)
+            
         if action == "create_reservation":
             await self.resolve_booking_target(update, context)
         elif action == "edit_phone":
@@ -610,7 +625,7 @@ class ReservationBot:
     async def reservations(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await self.delete_msg(update, context)
-        
+
         keyboard = [
             [
                 InlineKeyboardButton("✅ Подтверждённые брони", callback_data="show_reservations:CONFIRMED"),
