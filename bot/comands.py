@@ -6,7 +6,7 @@ from telegram.ext import ContextTypes
 from redis_config import redis_helpers
 from admin.comands import admin_pagination_callback, view_reservation, handle_reservation_decision, update_admin_list, notify_admin_to_call
 import json, requests, urllib.parse
-from redis_config.redis_helpers import get_user_data, set_user_data, get_reservation_by_id, update_reservation_confirmation
+from redis_config.redis_helpers import get_user_data, set_user_data, get_reservation_by_id, update_reservation_confirmation, get_status_by_id
 from admin.comands import is_admin, admin_start, get_all_reservations, cancel_reservation
 from iiko_token.update_token import update_iiko_token
 from dotenv import load_dotenv
@@ -303,7 +303,7 @@ class ReservationBot:
         elif action == "continue":
                 await self.confirm_reservation(update, query, context)
         elif action == "my_reservations":
-             await self.show_user_reservations(update, context)
+            await self.reservations(update, context)
         elif action == "me":
              await self.send_welcome_messages(update, context, other_people = False)
         elif action == "other_people":
@@ -314,14 +314,19 @@ class ReservationBot:
 
         elif action.startswith("confirm_cancel:"):
             _, res_id = action.split(":")
-            await cancel_reservation(res_id)
+            status = get_status_by_id(res_id)
+            if status == "CONFIRMED":
+                await cancel_reservation(res_id)
             await redis_helpers.delete_reservation_by_id(res_id)
             await query.edit_message_text("Бронь успешно удалена ✅")
-            await self.show_user_reservations(update, context)
+            await self.show_user_reservations(update, context, status)
 
-        elif action.startswith("deny_cancel"):
+        elif action.startswith("deny_cancel:"):
+            _, res_id = action.split(":")
+            status = get_status_by_id(res_id)
+            
             await query.edit_message_text("Отмена удаления броней ❌")
-            await self.show_user_reservations(update, context)
+            await self.show_user_reservations(update, context, status)
 
         elif action == "back_to_start":
             await self.start(update, context)
@@ -339,10 +344,15 @@ class ReservationBot:
             _, res_id = action.split(":")
             await update_reservation_confirmation(res_id, "DECLINED")
             await cancel_reservation(res_id)
+            await redis_helpers.delete_reservation_by_id(res_id)
             await query.edit_message_text("❌ Поняли, спасибо что предупредили")
 
             reservation = await get_reservation_by_id(res_id)
             await notify_admin_to_call(context, reservation)
+
+        elif action.startswith("show_reservations:"):
+            status = action.split(":")
+            await self.show_user_reservations(update, context, status)
 
 
 
@@ -551,16 +561,18 @@ class ReservationBot:
         data.pop("step", None)
         await set_user_data(user_id, data)
     
-    async def show_user_reservations(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def show_user_reservations(self, update: Update, context: ContextTypes.DEFAULT_TYPE, status):
+        
         query = update.callback_query
         await query.answer()
         user_id = query.from_user.id
 
         reservations = await get_all_reservations()
-
-        user_reservations = [r for r in reservations if (r["user_id"] == user_id and r["status"] == "CONFIRMED")]
+        
+        user_reservations = [r for r in reservations if (r["user_id"] == user_id and r["status"] == status[1])]
+        print(status)
         keyboard1 = []
-        keyboard1.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_start")])
+        keyboard1.append([InlineKeyboardButton("⬅️ Назад", callback_data="my_reservations")])
         if not user_reservations:
             text = await query.edit_message_text(
                 text="У вас нет активных броней",
@@ -583,3 +595,29 @@ class ReservationBot:
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         context.user_data['delete_msg'] = [message.message_id]
+
+    async def reservations(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Подтверждённые брони", callback_data="show_reservations:CONFIRMED"),
+            ],
+            [
+                InlineKeyboardButton("⏳ В ожидание", callback_data="show_reservations:PENDING")
+            ],
+            [
+                InlineKeyboardButton("⬅️ Назад", callback_data="back_to_start")
+            ]
+        ]
+        markup = InlineKeyboardMarkup(keyboard)
+
+        query = update.callback_query
+        await query.answer()
+        
+        message = await query.edit_message_text(
+            text="Выберите тип броней:",
+            reply_markup=markup
+        )
+        context.user_data['delete_msg'] = [message.message_id]
+
+        return message
+        

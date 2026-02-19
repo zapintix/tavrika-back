@@ -110,3 +110,11 @@ async def update_reservation_confirmation(res_id: str, status: str, message_id: 
 
     await redis.redis_client.set(key, json.dumps(reservation))
     return True
+
+async def get_status_by_id(res_id: str):
+    data = await redis.redis_client.get(reservation_key(res_id))
+    if not data:
+        return None
+    
+    reservation = json.loads(data)
+    return reservation["confirmation_status"]
