@@ -1,13 +1,7 @@
-from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup,
-    ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, ReplyKeyboardRemove
-)
-from telegram.ext import ContextTypes
 from redis_config import redis_helpers
-from admin.comands import admin_pagination_callback, view_reservation, handle_reservation_decision, update_admin_list, notify_admin_to_call
 import json, requests, urllib.parse
 from redis_config.redis_helpers import get_user_data, set_user_data, get_reservation_by_id, update_reservation_confirmation, get_status_by_id, get_confirmation_status_by_id
-from admin.comands import is_admin, admin_start, get_all_reservations, cancel_reservation
+# from admin.comands import is_admin, admin_start, get_all_reservations, cancel_reservation
 from iiko_token.update_token import update_iiko_token
 from dotenv import load_dotenv
 from datetime import date
@@ -16,12 +10,42 @@ import os, re
 
 load_dotenv()
 
+# Stub functions for admin
+def is_admin(user_id):
+    # TODO: implement admin check
+    return False
+
+def admin_start(chat_id, user_id):
+    # TODO: implement admin start
+    pass
+
+def get_all_reservations():
+    # TODO: implement
+    return []
+
+def cancel_reservation(res_id):
+    # TODO: implement
+    pass
+
 class ReservationBot:
     WEB_APP_URL = os.getenv("WEB_APP_URL")
     IIKO_API_URL = os.getenv("IIKO_API_URL")
 
-    def __init__(self, app):
-        self.application = app
+    def __init__(self):
+        pass
+
+    # Abstract methods to be implemented by subclasses
+    def send_message(self, chat_id, text, reply_markup=None):
+        raise NotImplementedError
+
+    def send_photo(self, chat_id, photo_url, caption, reply_markup=None):
+        raise NotImplementedError
+
+    def edit_message_text(self, chat_id, message_id, text, reply_markup=None):
+        raise NotImplementedError
+
+    def answer_callback_query(self, callback_query_id, text=None):
+        raise NotImplementedError
 
     
     async def fetch_tables(self, token: str, terminal_group_id: str):
@@ -116,89 +140,63 @@ class ReservationBot:
         context.user_data['delete_msg'] = []
 
     # -------------------- Start --------------------
-    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_id = update.effective_user.id
-
+    async def start(self, chat_id, user_id):
         if is_admin(user_id):
-            await admin_start(update, context)
+            await self.admin_start(chat_id, user_id)
             return
         
-        await self.delete_msg(update, context)
-
         keyboard = [
-            [InlineKeyboardButton("🍽 Забронировать стол", callback_data="create_reservation")],
-            [InlineKeyboardButton("📋 Мои брони", callback_data="my_reservations")]
+            [{"text": "🍽 Забронировать стол", "callback_data": "create_reservation"}],
+            [{"text": "📋 Мои брони", "callback_data": "my_reservations"}]
         ]
-        markup = InlineKeyboardMarkup(keyboard)
 
-        message = update.message or update.callback_query.message
+        self.send_message(chat_id, "Добро пожаловать в Таврику. Что бы вы хотели?", reply_markup=keyboard)
 
-        text = await message.reply_text(
-            "Добро пожаловать в Таврику. Что бы вы хотели?",
-            reply_markup=markup
-        )
-        context.user_data['delete_msg'] = [text.message_id]
-
-    async def resolve_booking_target(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        await self.delete_msg(update, context)
-        message = update.message or update.callback_query.message
-        msg = await message.reply_text(
-            "На кого бронируем стол?",
-            reply_markup = self.resolve_booking()
-        )
-        context.user_data['delete_msg'] = [msg.message_id]
+    async def resolve_booking_target(self, chat_id):
+        keyboard = [
+            [{"text": "На себя", "callback_data": "me"}],
+            [{"text": "На другого человека", "callback_data": "other_people"}]
+        ]
+        self.send_message(chat_id, "На кого бронируем стол?", reply_markup=keyboard)
     
-    async def send_welcome_messages(self, update: Update, context: ContextTypes.DEFAULT_TYPE, other_people):
-        user_id = update.effective_user.id
-
+    async def send_welcome_messages(self, chat_id, user_id, other_people):
         data = await get_user_data(user_id)
         data.clear()
         data["for_another_person"] = other_people
 
         if other_people == False:
-            tg_user = update.effective_user
-            data["name"] = tg_user.first_name
+            # For Max, name is not available, so skip or ask later
+            pass
 
         await set_user_data(user_id, data)
 
-        message = update.message or update.callback_query.message
-
-        await self.delete_msg(update, context)
-
-        delete_msg1 = await message.reply_text(
-            "Я помогу вам зарезервировать стол.\n"
-            "Пожалуйста, заполните данные ниже 👇"
-        )
+        self.send_message(chat_id, "Я помогу вам зарезервировать стол.\nПожалуйста, заполните данные ниже 👇")
         
-        delete_msg2 = await message.reply_text(
-            "Пожалуйста, укажите:",
-            reply_markup=self.build_keyboard(data)
-        )
-
-        context.user_data['delete_msg'] = [delete_msg1.message_id, delete_msg2.message_id]
+        keyboard = self.build_keyboard(data)
+        self.send_message(chat_id, "Пожалуйста, укажите:", reply_markup=keyboard)
 
 
     # -------------------- Клавиатуры --------------------
-    def build_keyboard(self, data: dict) -> InlineKeyboardMarkup:
+    def build_keyboard(self, data: dict):
         for_another_person = data.get("for_another_person", False)
 
         keyboard = []
 
         if for_another_person:
             name = data.get("name", "Укажите имя гостя")
-            keyboard.append([InlineKeyboardButton(f"👤 {name}", callback_data="edit_name")])
+            keyboard.append([{"text": f"👤 {name}", "callback_data": "edit_name"}])
 
         phone = data.get("phone", "Укажите номер телефона")
         table = f"Ваш стол: № {data['table']}" if "table" in data else "Выберите стол"
 
-        keyboard.append([InlineKeyboardButton(f"📱 {phone}", callback_data="edit_phone")])
-        keyboard.append([InlineKeyboardButton(f"🍽 {table}", callback_data="edit_table")])
+        keyboard.append([{"text": f"📱 {phone}", "callback_data": "edit_phone"}])
+        keyboard.append([{"text": f"🍽 {table}", "callback_data": "edit_table"}])
 
         if phone != "Укажите номер телефона" and table != "Выберите стол":
             if not for_another_person or data.get("name"):
-                keyboard.append([InlineKeyboardButton("✅ Подтвердить бронь", callback_data="continue")])
+                keyboard.append([{"text": "✅ Подтвердить бронь", "callback_data": "continue"}])
 
-        return InlineKeyboardMarkup(keyboard)
+        return keyboard
 
 
     def phone_keyboard(self) -> ReplyKeyboardMarkup:

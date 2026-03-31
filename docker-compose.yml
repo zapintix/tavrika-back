@@ -23,16 +23,16 @@ services:
       - tavrika
     command: uvicorn api_main:app --host 0.0.0.0 --port 8000
 
-  bot:
+  max:
     build:
       context: .
-      dockerfile: dockerfile
+      dockerfile: Dockerfile.max
     depends_on:
       - redis
     restart: unless-stopped
     networks:
       - tavrika
-    command: python main.py
+    command: python max_main.py
 
 volumes:
   redis_data:
