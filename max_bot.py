@@ -7,31 +7,45 @@ from bot.comands import ReservationBot  # Import the original bot logic
 from redis_config import redis_helpers
 from datetime import datetime, timedelta
 import asyncio
+from admin.comands import is_admin
 
 load_dotenv()
 
 MAX_API_URL = "https://platform-api.max.ru"
 MAX_TOKEN = os.getenv("MAX_TOKEN")  # Assume MAX_TOKEN is set in .env
 
-class MaxReservationBot:
+class MaxReservationBot(ReservationBot):
     def __init__(self):
+        super().__init__()
         self.headers = {
             "Authorization": f"Bearer {MAX_TOKEN}",
             "Content-Type": "application/json"
         }
-        self.reservation_bot = ReservationBot(None)  # Reuse logic, pass None for app
 
-    def send_message(self, chat_id, text, attachments=None):
+    def send_message(self, chat_id, text, reply_markup=None):
         payload = {
             "chat_id": chat_id,
             "text": text
         }
-        if attachments:
+        if reply_markup:
+            attachments = [self.build_inline_keyboard(reply_markup)]
             payload["attachments"] = attachments
 
         response = requests.post(f"{MAX_API_URL}/messages", json=payload, headers=self.headers)
         response.raise_for_status()
         return response.json()
+
+    def send_photo(self, chat_id, photo_url, caption, reply_markup=None):
+        # Implement if needed
+        pass
+
+    def edit_message_text(self, chat_id, message_id, text, reply_markup=None):
+        # Implement if needed
+        pass
+
+    def answer_callback_query(self, callback_query_id, text=None):
+        # Implement if needed
+        pass
 
     def build_inline_keyboard(self, buttons):
         """Convert Telegram-style buttons to MaX inline_keyboard"""
@@ -56,7 +70,7 @@ class MaxReservationBot:
 
     # Adapt the start method
     async def start(self, chat_id, user_id):
-        if self.reservation_bot.is_admin(user_id):
+        if is_admin(user_id):
             # Handle admin start - need to adapt admin logic
             pass
         else:
@@ -177,6 +191,24 @@ class MaxReservationBot:
         elif state == "waiting_phone":
             data["phone"] = text
             data["state"] = None
+            await redis_helpers.set_user_data(user_id, data)
+            self.send_message(chat_id, f"Телефон установлен: {text}")
+            keyboard = self.build_keyboard(data)
+            attachments = [self.build_inline_keyboard(keyboard)]
+            self.send_message(chat_id, "Пожалуйста, укажите:", attachments)
+    async def handle_text(self, chat_id, user_id, text):
+        data = await redis_helpers.get_user_data(user_id)
+        state = data.get("state")
+
+        if state == "waiting_name":
+            data["name"] = text
+            await redis_helpers.set_user_data(user_id, data)
+            self.send_message(chat_id, f"Имя установлено: {text}")
+            keyboard = self.build_keyboard(data)
+            attachments = [self.build_inline_keyboard(keyboard)]
+            self.send_message(chat_id, "Пожалуйста, укажите:", attachments)
+        elif state == "waiting_phone":
+            data["phone"] = text
             await redis_helpers.set_user_data(user_id, data)
             self.send_message(chat_id, f"Телефон установлен: {text}")
             keyboard = self.build_keyboard(data)
