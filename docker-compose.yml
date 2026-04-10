@@ -34,6 +34,15 @@ services:
       - tavrika
     command: python main.py
 
+  max-bot:
+    build:
+      context: .
+      dockerfile: dockerfile
+    restart: unless-stopped
+    networks:
+      - tavrika
+    command: python max_main.py
+
 volumes:
   redis_data:
 
