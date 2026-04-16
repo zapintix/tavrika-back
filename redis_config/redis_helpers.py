@@ -40,6 +40,8 @@ async def save_reservation(data:dict)->str:
     reserv = {
         "id": res_id,
         "user_id": data["user_id"],
+        "platform": data.get("platform", "telegram"),
+        "eventType": data.get("eventType", "telegram_bot"),
         "name":data["name"],
         "phone": data["phone"],
         "guests": data["guests"],
@@ -49,7 +51,8 @@ async def save_reservation(data:dict)->str:
         "time": data["time"],
         "status": "PENDING",
         "confirmation_status": "WAITING",  
-        "confirmation_message_id": None
+        "confirmation_message_id": None,
+        "admin_notifications": {},
     }
     
     await redis.redis_client.set(reservation_key(res_id), json.dumps(reserv))
@@ -94,7 +97,11 @@ async def update_reservation_status(res_id:str, new_status:str, id_iiko: str):
     await redis.redis_client.set(key, json.dumps(reservation))
     return True
 
-async def update_reservation_confirmation(res_id: str, status: str, message_id: int | None = None):
+async def update_reservation_confirmation(
+    res_id: str,
+    status: str,
+    message_id: str | int | None = None,
+):
     key = reservation_key(res_id)
 
     data = await redis.redis_client.get(key)
@@ -107,6 +114,38 @@ async def update_reservation_confirmation(res_id: str, status: str, message_id: 
 
     if message_id is not None:
         reservation["confirmation_message_id"] = message_id
+
+    await redis.redis_client.set(key, json.dumps(reservation))
+    return True
+
+async def update_reservation_admin_notification(
+    res_id: str,
+    admin_id: int,
+    message_id: str | int,
+):
+    key = reservation_key(res_id)
+
+    data = await redis.redis_client.get(key)
+    if not data:
+        return False
+
+    reservation = json.loads(data)
+    notifications = reservation.get("admin_notifications") or {}
+    notifications[str(admin_id)] = message_id
+    reservation["admin_notifications"] = notifications
+
+    await redis.redis_client.set(key, json.dumps(reservation))
+    return True
+
+async def clear_reservation_admin_notifications(res_id: str):
+    key = reservation_key(res_id)
+
+    data = await redis.redis_client.get(key)
+    if not data:
+        return False
+
+    reservation = json.loads(data)
+    reservation["admin_notifications"] = {}
 
     await redis.redis_client.set(key, json.dumps(reservation))
     return True
