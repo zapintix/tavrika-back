@@ -26,6 +26,7 @@ app = FastAPI(title="Reservation API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+    "http://localhost:5173/",
     WEB_APP_URL
 ],
     allow_credentials=True,
