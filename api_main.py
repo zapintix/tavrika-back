@@ -19,15 +19,14 @@ load_dotenv()
 
 MAX_TOKEN = os.getenv("MAX_TOKEN")
 MAX_API_BASE = "https://platform-api.max.ru"
+WEB_APP_URL = os.getenv("WEB_APP_URL")
 
 app = FastAPI(title="Reservation API")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-    "http://localhost:5173",
-    "https://dhn8pkql-5173.inc1.devtunnels.ms",
-    "https://reserve.localcafe.ru"
+    WEB_APP_URL
 ],
     allow_credentials=True,
     allow_methods=["*"],
