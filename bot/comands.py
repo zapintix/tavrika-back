@@ -560,6 +560,7 @@ class ReservationBot:
             "tableId": selected_table["id"],
             "date": date_value,
             "time": time_value,
+            "occasion": payload.get("occasion") or "-",
         }
         await redis_helpers.save_reservation(reservation_data)
 

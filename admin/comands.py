@@ -265,7 +265,7 @@ async def view_reservation(
         f"Гостей: {reservation['guests']}\n"
         f"Дата: {reservation['date']} {reservation['time']}\n"
         f"Стол: {reservation['table']}\n"
-        f"Мероприятие: {reservation['occasion']}\n"
+        f"Мероприятие: {reservation.get('occasion') or '-'}\n"
         f"Статус: {reservation['status']}"
     )
 
@@ -318,7 +318,7 @@ async def create_reserve(reservation_data: dict[str, Any]) -> dict[str, Any]:
         },
         "phone": format_phone(reservation_data["phone"]),
         "guestsCount": reservation_data.get("guests", 2),
-        "comment": reservation_data.get("occasion", "-"),
+        "comment": reservation_data.get("occasion") or "-",
         "durationInMinutes": 120,
         "shouldRemind": True,
         "tableIds": [reservation_data["table_id"]],
@@ -405,8 +405,8 @@ async def handle_reservation_decision(
             "Ваша заявка подтверждена.\n\n"
             f"Дата: {reservation['date']} {reservation['time']}\n"
             f"Стол: {reservation['table']}\n"
-            f"Гостей: {reservation['guests']}",
-            f"Мероприятие: {reservation['occasion']}"
+            f"Гостей: {reservation['guests']}\n"
+            f"Мероприятие: {reservation.get('occasion') or '-'}"
         )
         reservation_data = {
             "id": reservation["id"],
@@ -417,7 +417,7 @@ async def handle_reservation_decision(
             "guests": reservation["guests"],
             "date": reservation["date"],
             "time": reservation["time"],
-            "occasion": reservation["occasion"],
+            "occasion": reservation.get("occasion") or "-",
             "eventType": reservation.get("eventType", "max_bot"),
         }
         reservation_result = await create_reserve(reservation_data)
@@ -452,7 +452,7 @@ async def handle_reservation_decision(
             f"Дата: {reservation['date']} {reservation['time']}\n"
             f"Стол: {reservation['table']}\n"
             f"Гостей: {reservation['guests']}\n"
-            f"Мероприятие: {reservation['occasion']}\n\n"
+            f"Мероприятие: {reservation.get('occasion') or '-'}\n\n"
             "Попробуйте выбрать другое время или другой стол."
         )
         await delete_reservation_by_id(reservation_id)
@@ -492,7 +492,7 @@ async def notify_admin_to_call(context: Any, reservation: dict[str, Any]) -> Non
         f"Телефон: {reservation['phone']}\n"
         f"Дата: {reservation['date']} {reservation['time']}\n"
         f"Стол: {reservation['table']}\n"
-        f"Мероприятие: {reservation['occasion']}\n\n"
+        f"Мероприятие: {reservation.get('occasion') or '-'}\n\n"
 
     )
 

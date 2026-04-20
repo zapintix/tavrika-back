@@ -44,7 +44,7 @@ class ReservationWebAppRequest(BaseModel):
     table_number: str | int | None = Field(default=None, alias="tableNumber")
     guest_name: str = Field(alias="guestName")
     guest_phone: str = Field(alias="guestPhone")
-    occasion: str = Field(alias="occasion")
+    occasion: str | None = Field(default=None, alias="occasion")
 
 class ReservationTableRequest(BaseModel):
     date: str
@@ -138,7 +138,7 @@ async def _build_reservation_payload(req: ReservationCreateRequest) -> dict:
         "tableId": selected_table["id"],
         "date": date_iso,
         "time": time_value,
-        "occasion":req.occasion
+        "occasion": req.occasion or "-",
     }
 
 
