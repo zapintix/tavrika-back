@@ -44,6 +44,7 @@ class ReservationWebAppRequest(BaseModel):
     table_number: str | int | None = Field(default=None, alias="tableNumber")
     guest_name: str = Field(alias="guestName")
     guest_phone: str = Field(alias="guestPhone")
+    occasion: str = Field(alias="occasion")
 
 class ReservationTableRequest(BaseModel):
     date: str
@@ -70,6 +71,7 @@ class ReservationCreateRequest(BaseModel):
     guest_phone: str | None = Field(default=None, alias="guestPhone")
     platform: str = "max"
     event_type: str | None = Field(default=None, alias="eventType")
+    occasion: str | None = Field(default=None, alias="occasion")
 
 
 def _normalize_name(raw_name: str | None) -> str | None:
@@ -136,6 +138,7 @@ async def _build_reservation_payload(req: ReservationCreateRequest) -> dict:
         "tableId": selected_table["id"],
         "date": date_iso,
         "time": time_value,
+        "occasion":req.occasion
     }
 
 
@@ -279,11 +282,13 @@ async def create_webapp_reservation(req: ReservationWebAppRequest):
         tableNumber=req.table_number,
         guestName=req.guest_name,
         guestPhone=req.guest_phone,
+        occasion=req.occasion,
         platform="max",
         eventType="max_web_app",
     )
 
     reservation_data = await _build_reservation_payload(internal_req)
+    print(reservation_data)
     reservation_id = await redis_helpers.save_reservation(reservation_data)
 
     confirmation_text = "\n".join([
@@ -294,6 +299,7 @@ async def create_webapp_reservation(req: ReservationWebAppRequest):
         f"Время: {reservation_data['time']}",
         f"Стол: №{reservation_data['table']}",
         f"Гостей: {reservation_data['guests']}",
+        f"Метоприятие: {reservation_data['occasion']}",
     ])
 
     await send_max_message(
