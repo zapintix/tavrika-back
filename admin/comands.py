@@ -517,7 +517,8 @@ async def notify_new_reservation(bot: Any, reservation_json: str | bytes) -> Non
         f"Телефон: {reservation['phone']}\n"
         f"Дата: {reservation['date']} {reservation['time']}\n"
         f"Стол: {reservation['table']}\n"
-        f"Гостей: {reservation['guests']}"
+        f"Гостей: {reservation['guests']}\n"
+        f"Мероприятие: {reservation.get('occasion') or '-'}"
     )
 
     buttons = [

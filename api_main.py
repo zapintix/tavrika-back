@@ -299,7 +299,7 @@ async def create_webapp_reservation(req: ReservationWebAppRequest):
         f"Время: {reservation_data['time']}",
         f"Стол: №{reservation_data['table']}",
         f"Гостей: {reservation_data['guests']}",
-        f"Метоприятие: {reservation_data['occasion']}",
+        f"Мероприятие: {reservation_data.get('occasion') or '-'}",
     ])
 
     await send_max_message(
@@ -314,4 +314,3 @@ async def create_webapp_reservation(req: ReservationWebAppRequest):
         "message": "Бронь создана и подтверждение отправлено в MAX.",
         "reservation": reservation_data,
     }
-
