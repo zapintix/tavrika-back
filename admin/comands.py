@@ -318,7 +318,7 @@ async def create_reserve(reservation_data: dict[str, Any]) -> dict[str, Any]:
         },
         "phone": format_phone(reservation_data["phone"]),
         "guestsCount": reservation_data.get("guests", 2),
-        "comment": "MAX bot reservation",
+        "comment": reservation_data.get("occasion", "-"),
         "durationInMinutes": 120,
         "shouldRemind": True,
         "tableIds": [reservation_data["table_id"]],
