@@ -265,7 +265,7 @@ async def view_reservation(
         f"Гостей: {reservation['guests']}\n"
         f"Дата: {reservation['date']} {reservation['time']}\n"
         f"Стол: {reservation['table']}\n"
-        f"Платформа: {reservation.get('platform', 'telegram')}\n"
+        f"Мероприятие: {reservation['occasion']}\n"
         f"Статус: {reservation['status']}"
     )
 
@@ -405,7 +405,8 @@ async def handle_reservation_decision(
             "Ваша заявка подтверждена.\n\n"
             f"Дата: {reservation['date']} {reservation['time']}\n"
             f"Стол: {reservation['table']}\n"
-            f"Гостей: {reservation['guests']}"
+            f"Гостей: {reservation['guests']}",
+            f"Мероприятие: {reservation['occasion']}"
         )
         reservation_data = {
             "id": reservation["id"],
@@ -416,6 +417,7 @@ async def handle_reservation_decision(
             "guests": reservation["guests"],
             "date": reservation["date"],
             "time": reservation["time"],
+            "occasion": reservation["occasion"],
             "eventType": reservation.get("eventType", "max_bot"),
         }
         reservation_result = await create_reserve(reservation_data)
@@ -449,7 +451,8 @@ async def handle_reservation_decision(
             "К сожалению, ваша заявка отклонена.\n"
             f"Дата: {reservation['date']} {reservation['time']}\n"
             f"Стол: {reservation['table']}\n"
-            f"Гостей: {reservation['guests']}\n\n"
+            f"Гостей: {reservation['guests']}\n"
+            f"Мероприятие: {reservation['occasion']}\n\n"
             "Попробуйте выбрать другое время или другой стол."
         )
         await delete_reservation_by_id(reservation_id)
@@ -489,7 +492,8 @@ async def notify_admin_to_call(context: Any, reservation: dict[str, Any]) -> Non
         f"Телефон: {reservation['phone']}\n"
         f"Дата: {reservation['date']} {reservation['time']}\n"
         f"Стол: {reservation['table']}\n"
-        f"Статус подтверждения: {reservation['confirmation_status']}"
+        f"Мероприятие: {reservation['occasion']}\n\n"
+
     )
 
     if ADMIN_TRANSPORT == "telegram":
