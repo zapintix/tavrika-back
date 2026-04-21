@@ -95,17 +95,41 @@ async def send_confirmation_request(context, reservation):
 def schedule_reservation_reminders(context, reservation):
     reservation_time = datetime.fromisoformat(f"{reservation['date']}T{reservation['time']}")
     confirm_time = reservation_time - timedelta(hours=2)
-    run_date = confirm_time if confirm_time > datetime.now() else datetime.now() + timedelta(minutes=5)
+    now = datetime.now()
+    
+    if now > reservation_time:
+        print(f"Бронь {reservation['id']} уже была в {reservation_time}, пропускаем напоминание")
+        return
+    
+    minutes_until_reservation = (reservation_time - now).total_seconds() / 60
+    
+    if minutes_until_reservation < 15:
+        print(f"До брони {minutes_until_reservation:.0f} мин, слишком поздно для напоминания")
+        run_date = now + timedelta(minutes=5)
+        if run_date > reservation_time:
+            return
+        
+    elif confirm_time <= now:
+        print(f"Confirm_time {confirm_time} уже прошёл, отправляем через 15 минут")
+        run_date = now + timedelta(minutes=15)
+        if run_date > reservation_time - timedelta(minutes=5):
+            run_date = reservation_time - timedelta(minutes=5)
 
-    if run_date > datetime.now():
-        scheduler.add_job(
-            send_confirmation_request,
-            trigger="date",
-            run_date=run_date,
-            args=[context, reservation],
-            misfire_grace_time=60,
-        )
-
+    else:
+        run_date = confirm_time
+        print(f"Плановое напоминание в {run_date}")
+    
+    if run_date <= now:
+        print(f"run_date {run_date} уже в прошлом, пропускаем")
+        return
+    
+    scheduler.add_job(
+        send_confirmation_request,
+        trigger="date",
+        run_date=run_date,
+        args=[context, reservation],
+        misfire_grace_time=60,
+    )
 
 async def confirmation_timeout(context, reservation_id):
     from admin.comands import notify_admin_to_call

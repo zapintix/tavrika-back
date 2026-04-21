@@ -696,7 +696,6 @@ class ReservationBot:
         status = await get_status_by_id(reservation_id)
         if status == "CONFIRMED":
             await cancel_reservation(reservation_id)
-            print("предвызов")
             await notify_admin_to_cancel(None, reservation)
         await redis_helpers.delete_reservation_by_id(reservation_id)
 
