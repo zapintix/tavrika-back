@@ -100,7 +100,8 @@ def schedule_reservation_reminders(context, reservation):
     if now > reservation_time:
         print(f"Бронь {reservation['id']} уже была в {reservation_time}, пропускаем напоминание")
         return
-    
+    print(reservation_time)
+    print(now)
     minutes_until_reservation = (reservation_time - now).total_seconds() / 60
     print(minutes_until_reservation)
 
