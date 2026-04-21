@@ -102,20 +102,24 @@ def schedule_reservation_reminders(context, reservation):
         return
     
     minutes_until_reservation = (reservation_time - now).total_seconds() / 60
-    
+    print(minutes_until_reservation)
+
     if minutes_until_reservation < 15:
+        print(1)
         print(f"До брони {minutes_until_reservation:.0f} мин, слишком поздно для напоминания")
         run_date = now + timedelta(minutes=5)
         if run_date > reservation_time:
             return
         
     elif confirm_time <= now:
+        print(2)
         print(f"Confirm_time {confirm_time} уже прошёл, отправляем через 15 минут")
         run_date = now + timedelta(minutes=15)
         if run_date > reservation_time - timedelta(minutes=5):
             run_date = reservation_time - timedelta(minutes=5)
 
     else:
+        print(3)
         run_date = confirm_time
         print(f"Плановое напоминание в {run_date}")
     
