@@ -15,8 +15,6 @@ services:
     depends_on:
       - redis
     restart: unless-stopped
-    env_file:
-      - .env
     ports:
       - "8103:8000"
     volumes:
@@ -41,8 +39,6 @@ services:
       context: .
       dockerfile: dockerfile
     restart: unless-stopped
-    env_file:
-      - .env
     networks:
       - tavrika
     command: python max_main.py
