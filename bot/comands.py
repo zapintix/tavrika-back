@@ -692,7 +692,7 @@ class ReservationBot:
         reservation_id: str,
         callback_id: str,
     ) -> None:
-        reservation = get_reservation_by_id(reservation_id)
+        reservation = await get_reservation_by_id(reservation_id)
         status = await get_status_by_id(reservation_id)
         if status == "CONFIRMED":
             await cancel_reservation(reservation_id)
