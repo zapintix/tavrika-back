@@ -510,6 +510,7 @@ async def notify_admin_to_call(context: Any, reservation: dict[str, Any]) -> Non
         await _send_to_admin(admin_id, text, buttons=buttons)
 
 async def notify_admin_to_cancel(context: Any, reservation: dict[str, Any]):
+    print("вызов")
     admin_ids = _admin_ids()
 
     text = (
@@ -523,9 +524,13 @@ async def notify_admin_to_cancel(context: Any, reservation: dict[str, Any]):
 
     buttons = []
     buttons.append([_callback_button("К списку", "admin:view_reservations")])
+    print("вызов2")
 
     for admin_id in admin_ids:
         await _send_to_admin(admin_id, text, buttons=buttons)
+
+    print("вызов 3")
+    
 
 async def notify_new_reservation(bot: Any, reservation_json: str | bytes) -> None:
     if isinstance(reservation_json, bytes):
