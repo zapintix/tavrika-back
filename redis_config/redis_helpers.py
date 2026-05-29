@@ -39,7 +39,7 @@ async def save_reservation(data:dict)->str:
 
     reserv = {
         "id": res_id,
-        "user_id": data["user_id"],
+        "user_id": data.get("user_id"),
         "platform": data.get("platform", "telegram"),
         "eventType": data.get("eventType", "telegram_bot"),
         "name":data["name"],

@@ -45,7 +45,7 @@ def is_admin_payload(payload: str) -> bool:
             "admin:page:",
             "admin:reservation:",
             "admin:approve:",
-            "admin:reject:",
+            "admin:delete:"
         )
     )
 
@@ -97,15 +97,17 @@ async def admin_start(bot: Any, user_id: int, callback_id: str | None = None) ->
 
 
 async def handle_admin_callback(bot: Any, update: dict[str, Any]) -> bool:
+    print(1)
     callback = update.get("callback") or {}
     payload = callback.get("payload") or ""
     callback_id = callback.get("callback_id")
     user = callback.get("user") or {}
     user_id = user.get("user_id")
 
+    print(callback)
     if not user_id or not callback_id or not is_admin_payload(payload):
         return False
-
+    
     if payload == "admin:menu":
         await admin_start(bot, user_id, callback_id=callback_id)
         return True
@@ -142,6 +144,17 @@ async def handle_admin_callback(bot: Any, update: dict[str, Any]) -> bool:
         )
         return True
 
+    if payload.startswith("admin:delete:"):
+        reservation_id, source = _parse_reservation_action_payload(payload)
+        await handle_delete_reservation(
+            bot,
+            user_id,
+            reservation_id,
+            callback_id=callback_id,
+            source=source,
+        )
+        return True
+    
     if payload.startswith("admin:reject:"):
         reservation_id, source = _parse_reservation_action_payload(payload)
         await handle_reservation_decision(
@@ -208,57 +221,8 @@ async def show_reservations(
         buttons=buttons,
     )
 
-
-async def view_reservation(
-    bot: Any,
-    user_id: int,
-    reservation_id: str,
-    callback_id: str | None = None,
-    source: str | None = None,
-) -> None:
-    reservations = _pending_reservations(await get_all_reservations())
-    index = next((i for i, item in enumerate(reservations) if item["id"] == reservation_id), None)
-
-    if index is None:
-        if source == ADMIN_NOTIFICATION_SOURCE and callback_id is not None:
-            await _respond(
-                bot,
-                user_id=user_id,
-                callback_id=callback_id,
-                text="Заявка уже обработана.",
-            )
-            return
-
-        await _respond(
-            bot,
-            user_id=user_id,
-            callback_id=callback_id,
-            text="Заявка не найдена или уже обработана.",
-            buttons=[[_callback_button("К списку", "admin:view_reservations")]],
-        )
-        return
-
-    reservation = reservations[index]
-    total = len(reservations)
-
-    nav_buttons = []
-    if index > 0:
-        nav_buttons.append(
-            _callback_button(
-                "⬅️",
-                _reservation_payload(reservations[index - 1]["id"], source),
-            )
-        )
-    nav_buttons.append(_callback_button("К списку", "admin:view_reservations"))
-    if index < total - 1:
-        nav_buttons.append(
-            _callback_button(
-                "➡️",
-                _reservation_payload(reservations[index + 1]["id"], source),
-            )
-        )
-
-    text = (
+def format_reservation(reservation: dict[str, Any], index: int, total: int) -> str:
+    return (
         f"Заявка {index + 1} из {total}\n\n"
         f"Имя: {reservation['name']}\n"
         f"Телефон: {reservation['phone']}\n"
@@ -269,28 +233,115 @@ async def view_reservation(
         f"Статус: {reservation['status']}"
     )
 
-    await _respond(
-        bot,
-        user_id=user_id,
-        callback_id=callback_id,
-        text=text,
-        buttons=[
-            nav_buttons,
-            [
-                _callback_button(
-                    "Принять",
-                    _decision_payload("approve", reservation_id, source),
-                    intent="positive",
-                ),
-                _callback_button(
-                    "Отклонить",
-                    _decision_payload("reject", reservation_id, source),
-                    intent="negative",
-                ),
-            ],
-            [_callback_button("В меню", "admin:menu")],
-        ],
+def build_nav_buttons(reservations: list[dict], index: int, source: str | None):
+    buttons = []
+
+    if index > 0:
+        buttons.append(
+            _callback_button(
+                "⬅️",
+                _reservation_payload(reservations[index - 1]["id"], source),
+            )
+        )
+
+    buttons.append(_callback_button("К списку", "admin:view_reservations"))
+
+    if index < len(reservations) - 1:
+        buttons.append(
+            _callback_button(
+                "➡️",
+                _reservation_payload(reservations[index + 1]["id"], source),
+            )
+        )
+
+    return buttons
+
+def build_action_buttons(reservation_id: str, source: str | None):
+    return [
+        _callback_button(
+            "Принять",
+            _decision_payload("approve", reservation_id, source),
+            intent="positive",
+        ),
+        _callback_button(
+            "Отклонить",
+            _decision_payload("reject", reservation_id, source),
+            intent="negative",
+        ),
+    ]
+
+def delete_button(reservation_id: str, source: str | None):
+    return [
+       _callback_button(
+            "Удалить из списка",
+            _decision_payload("delete", reservation_id, source),
+        )
+    ]
+
+async def view_reservation(
+    bot: Any,
+    user_id: int,
+    reservation_id: str,
+    callback_id: str | None = None,
+    source: str | None = None,
+) -> None:
+    reservations = _pending_reservations(await get_all_reservations())
+
+    index = next(
+        (i for i, item in enumerate(reservations) if item["id"] == reservation_id),
+        None,
     )
+
+    if index is None:
+        text = "Заявка уже обработана." if source == ADMIN_NOTIFICATION_SOURCE else "Заявка не найдена или уже обработана."
+
+        await _respond(
+            bot,
+            user_id=user_id,
+            callback_id=callback_id,
+            text=text,
+            buttons=[[_callback_button("К списку", "admin:view_reservations")]],
+        )
+        return
+
+    reservation = reservations[index]
+    total = len(reservations)
+
+    text = format_reservation(reservation, index, total)
+    nav_buttons = build_nav_buttons(reservations, index, source)
+
+    if reservation["platform"] == "max":
+        await _respond(
+            bot,
+            user_id=user_id,
+            callback_id=callback_id,
+            text=text,
+            buttons=[
+                nav_buttons,
+                build_action_buttons(reservation_id, source),
+                [_callback_button("В меню", "admin:menu")],
+            ],
+        )
+
+    elif reservation["platform"] == "site":
+
+        text = (
+            f"{text}\n\n"
+            "⚠️ Внимание, заявка с сайта\n"
+            f"📞 Позвоните клиенту: {reservation['phone']}"
+        )   
+        await _respond(
+            bot,
+            user_id=user_id,
+            callback_id=callback_id,
+            text=text,
+            buttons=[
+                nav_buttons,
+                delete_button(reservation_id, source),
+                [_callback_button("В меню", "admin:menu")],
+            ],
+        )
+        
 
 
 def format_phone(phone: str) -> str:
@@ -369,7 +420,54 @@ async def cancel_reservation(reservation_id: str) -> dict[str, Any]:
     response.raise_for_status()
     return {"success": True, "data": response.json()}
 
+async def handle_delete_reservation(
+    bot: Any,
+    admin_user_id: int,
+    reservation_id: str,
+    callback_id: str | None = None,
+    source: str | None = None,
+) -> None:
+    reservation = await get_reservation_by_id(reservation_id)
 
+    if not reservation:
+        await _respond(
+            bot,
+            user_id=admin_user_id,
+            callback_id=callback_id,
+            text="Заявка уже удалена или не найдена.",
+            buttons=[
+                [_callback_button("К списку", "admin:view_reservations")]
+            ],
+        )
+        return
+
+    await delete_reservation_by_id(reservation_id)
+
+    await _delete_admin_notification_messages(reservation)
+
+    text = (
+        "Заявка удалена из списка.\n\n"
+        f"Имя: {reservation['name']}\n"
+        f"Дата: {reservation['date']} {reservation['time']}"
+    )
+
+    if source == ADMIN_NOTIFICATION_SOURCE and callback_id is not None:
+        await _respond(
+            bot,
+            user_id=admin_user_id,
+            callback_id=callback_id,
+            text=text,
+        )
+        return
+
+    await show_reservations(
+        bot,
+        admin_user_id,
+        callback_id=callback_id,
+        page=0,
+    )
+
+    
 async def handle_reservation_decision(
     bot: Any,
     admin_user_id: int,

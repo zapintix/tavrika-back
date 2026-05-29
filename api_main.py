@@ -58,7 +58,7 @@ class ReservationTableResponse(BaseModel):
 class ReservationCreateRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    user_id: int = Field(alias="userId")
+    user_id: int | None = Field(default=None, alias="userId")
     date: str
     time: str
     guests: int
@@ -85,7 +85,10 @@ def _normalize_name(raw_name: str | None) -> str | None:
 
 
 async def _build_reservation_payload(req: ReservationCreateRequest) -> dict:
-    stored_data = await get_user_data(req.user_id)
+    stored_data = {}
+
+    if req.user_id is not None:
+        stored_data = await get_user_data(req.user_id)
     stored_phone = stored_data.get("phone", "")
 
     name = _normalize_name(req.name or req.guest_name or stored_data.get("profile_name"))
@@ -125,7 +128,8 @@ async def _build_reservation_payload(req: ReservationCreateRequest) -> dict:
     chat_id = stored_data.get("chat_id")
     if chat_id is not None:
         preserved_data["chat_id"] = chat_id
-    await set_user_data(req.user_id, preserved_data)
+    if req.user_id is not None:
+        await set_user_data(req.user_id, preserved_data)
 
     return {
         "user_id": req.user_id,
@@ -145,7 +149,6 @@ async def _build_reservation_payload(req: ReservationCreateRequest) -> dict:
 @app.post("/api/reservations/table")
 async def get_reserved_tables(req: ReservationTableRequest):
     day_reservations = await bot.fetch_day_reservations(req.date)
-
     requested_time = datetime.fromisoformat(
         f"{req.date}T{req.time}"
     )
@@ -153,7 +156,6 @@ async def get_reserved_tables(req: ReservationTableRequest):
     reserved_table_ids: set[str] = set()
     if len(day_reservations) != 0:
         for r in day_reservations:
-            print(r)
             start = datetime.fromisoformat(r["estimatedStartTime"])
             duration = r.get("durationInMinutes", 120) 
             end = start + timedelta(minutes=duration)
@@ -164,6 +166,34 @@ async def get_reserved_tables(req: ReservationTableRequest):
 
     return {
         "reservedTableIds": list(reserved_table_ids)
+    }
+
+@app.post("/api/reservations/site")
+async def create_site_reservation(req: ReservationCreateRequest):
+    internal_req = ReservationCreateRequest(
+        userId=None,
+        date=req.date,
+        time=req.time,
+        guests=req.guests,
+        tableId=req.table_id,
+        tableNumber=req.table_number,
+        guestName=req.guest_name,
+        guestPhone=req.guest_phone,
+        occasion=req.occasion,
+        platform="site",
+        eventType="website",
+    )
+    print(internal_req)
+
+    reservation_data = await _build_reservation_payload(internal_req)
+
+    reservation_id = await redis_helpers.save_reservation(reservation_data)
+
+    return {
+        "status": "created",
+        "reservationId": reservation_id,
+        "message": "Бронь успешно создана",
+        "reservation": reservation_data,
     }
 
 def _validate_app_data(app_data: str) -> bool:
