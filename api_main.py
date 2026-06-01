@@ -149,18 +149,27 @@ async def _build_reservation_payload(req: ReservationCreateRequest) -> dict:
 @app.post("/api/reservations/table")
 async def get_reserved_tables(req: ReservationTableRequest):
     day_reservations = await bot.fetch_day_reservations(req.date)
-    requested_time = datetime.fromisoformat(
+
+    requested_start  = datetime.fromisoformat(
         f"{req.date}T{req.time}"
     )
+
+    requested_end = requested_start  + timedelta(minutes=120)
 
     reserved_table_ids: set[str] = set()
     if len(day_reservations) != 0:
         for r in day_reservations:
-            start = datetime.fromisoformat(r["estimatedStartTime"])
+            print(r)
+            existing_start = datetime.fromisoformat(r["estimatedStartTime"])
             duration = r.get("durationInMinutes", 120) 
-            end = start + timedelta(minutes=duration)
+            existing_end  = existing_start + timedelta(minutes=duration)
 
-            if start <= requested_time < end:
+            intersects = (
+                requested_start  < existing_end
+                and requested_end > existing_start
+            )
+
+            if intersects:
                 reserved_table_ids.update(r.get("tableIds", []))
             print(reserved_table_ids)
 
