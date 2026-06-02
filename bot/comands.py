@@ -346,9 +346,9 @@ class ReservationBot:
     ) -> None:
         await self._prepare_booking_context(user_id, user)
         booking_button = (
-            self._web_app_button("Забронировать стол", self.bot_username)
+            self._web_app_button("📅 Забронировать стол", self.bot_username)
             if self.bot_username
-            else self._callback_button("Забронировать стол", "create_reservation")
+            else self._callback_button("📅 Забронировать стол", "create_reservation")
         )
         await self._respond(
             user_id=user_id,
@@ -356,7 +356,7 @@ class ReservationBot:
             text="Добро пожаловать в Таврику. Что бы вы хотели?",
             buttons=[
                 [booking_button],
-                [self._callback_button("Мои брони", "my_reservations")],
+                [self._callback_button("📋 Мои брони", "my_reservations")],
             ],
         )
 
@@ -444,7 +444,7 @@ class ReservationBot:
             user_id=user_id,
             callback_id=callback_id,
             text=text,
-            buttons=[[self._callback_button("В меню", "back_to_start")]],
+            buttons=[[self._callback_button("🏠 В меню", "back_to_start")]],
         )
 
     async def _handle_web_app_booking_message(
@@ -462,7 +462,7 @@ class ReservationBot:
             await self._send_message(
                 user_id,
                 "Не удалось прочитать данные бронирования из WebApp.",
-                buttons=[[self._callback_button("В меню", "back_to_start")]],
+                buttons=[[self._callback_button("🏠 В меню", "back_to_start")]],
             )
             return
 
@@ -471,7 +471,7 @@ class ReservationBot:
             await self._send_message(
                 user_id,
                 "Не удалось подтвердить пользователя для бронирования.",
-                buttons=[[self._callback_button("В меню", "back_to_start")]],
+                buttons=[[self._callback_button("🏠 В меню", "back_to_start")]],
             )
             return
 
@@ -486,7 +486,7 @@ class ReservationBot:
             await self._send_message(
                 user_id,
                 "Не удалось определить имя гостя.",
-                buttons=[[self._callback_button("В меню", "back_to_start")]],
+                buttons=[[self._callback_button("🏠 В меню", "back_to_start")]],
             )
             return
 
@@ -494,7 +494,7 @@ class ReservationBot:
             await self._send_message(
                 user_id,
                 "Некорректный номер телефона в данных WebApp.",
-                buttons=[[self._callback_button("В меню", "back_to_start")]],
+                buttons=[[self._callback_button("🏠 В меню", "back_to_start")]],
             )
             return
 
@@ -502,7 +502,7 @@ class ReservationBot:
             await self._send_message(
                 user_id,
                 "Некорректная дата или время в данных WebApp.",
-                buttons=[[self._callback_button("В меню", "back_to_start")]],
+                buttons=[[self._callback_button("🏠 В меню", "back_to_start")]],
             )
             return
 
@@ -510,7 +510,7 @@ class ReservationBot:
             await self._send_message(
                 user_id,
                 "Количество гостей должно быть от 1 до 20.",
-                buttons=[[self._callback_button("В меню", "back_to_start")]],
+                buttons=[[self._callback_button("🏠 В меню", "back_to_start")]],
             )
             return
 
@@ -518,7 +518,7 @@ class ReservationBot:
             await self._send_message(
                 user_id,
                 "Не удалось определить выбранный стол.",
-                buttons=[[self._callback_button("В меню", "back_to_start")]],
+                buttons=[[self._callback_button("🏠 В меню", "back_to_start")]],
             )
             return
 
@@ -537,7 +537,7 @@ class ReservationBot:
             await self._send_message(
                 user_id,
                 "Выбранный стол уже недоступен. Попробуйте выбрать другой стол в приложении.",
-                buttons=[[self._callback_button("В меню", "back_to_start")]],
+                buttons=[[self._callback_button("🏠 В меню", "back_to_start")]],
             )
             return
 
@@ -578,7 +578,7 @@ class ReservationBot:
         await self._send_message(
             user_id,
             confirmation_text,
-            buttons=[[self._callback_button("В меню", "back_to_start")]],
+            buttons=[[self._callback_button("🏠 В меню", "back_to_start")]],
         )
 
     async def reservations(self, user_id: int, callback_id: str) -> None:
@@ -587,9 +587,9 @@ class ReservationBot:
             callback_id=callback_id,
             text="Выберите тип броней:",
             buttons=[
-                [self._callback_button("Подтверждённые", "show_reservations:CONFIRMED")],
-                [self._callback_button("В ожидании", "show_reservations:PENDING")],
-                [self._callback_button("Назад", "back_to_start")],
+                [self._callback_button("✅ Подтверждённые", "show_reservations:CONFIRMED")],
+                [self._callback_button("⏳ В ожидании", "show_reservations:PENDING")],
+                [self._callback_button("⬅️ Назад", "back_to_start")],
             ],
         )
 
@@ -614,8 +614,8 @@ class ReservationBot:
                 callback_id=callback_id,
                 text="У вас нет броней в этом разделе.",
                 buttons=[
-                    [self._callback_button("Назад", "my_reservations")],
-                    [self._callback_button("В меню", "back_to_start")],
+                    [self._callback_button("⬅️ Назад", "my_reservations")],
+                    [self._callback_button("🏠 В меню", "back_to_start")],
                 ],
             )
             return
@@ -623,13 +623,13 @@ class ReservationBot:
         buttons = [
             [
                 self._callback_button(
-                    f"{reservation['date']} {reservation['time']} · стол {reservation['table']}",
+                    f"📅 {reservation['date']} {reservation['time']} · стол {reservation['table']}",
                     f"detail_reservation:{reservation['id']}",
                 )
             ]
             for reservation in user_reservations
         ]
-        buttons.append([self._callback_button("Назад", "my_reservations")])
+        buttons.append([self._callback_button("⬅️ Назад", "my_reservations")])
 
         await self._respond(
             user_id=user_id,
@@ -663,8 +663,8 @@ class ReservationBot:
             callback_id=callback_id,
             text=text,
             buttons=[
-                [self._callback_button("Отменить бронь", f"cancel:{reservation_id}", intent="negative")],
-                [self._callback_button("Назад", "my_reservations")],
+                [self._callback_button("❌ Отменить бронь", f"cancel:{reservation_id}", intent="negative")],
+                [self._callback_button("⬅️ Назад", "my_reservations")],
             ],
         )
 
@@ -680,8 +680,8 @@ class ReservationBot:
             text="Точно удалить бронь?",
             buttons=[
                 [
-                    self._callback_button("Да, удалить", f"confirm_cancel:{reservation_id}", intent="negative"),
-                    self._callback_button("Нет", f"deny_cancel:{reservation_id}"),
+                    self._callback_button("🗑️ Да, удалить", f"confirm_cancel:{reservation_id}", intent="negative"),
+                    self._callback_button("↩️ Нет", f"deny_cancel:{reservation_id}"),
                 ]
             ],
         )
@@ -703,7 +703,7 @@ class ReservationBot:
             user_id=user_id,
             callback_id=callback_id,
             text="Бронь успешно удалена.",
-            buttons=[[self._callback_button("Мои брони", "my_reservations")]],
+            buttons=[[self._callback_button("📋 Мои брони", "my_reservations")]],
         )
 
     async def deny_cancel_reservation(
@@ -767,7 +767,7 @@ class ReservationBot:
 
         action_buttons = [row[:] for row in buttons] if buttons else []
         if include_menu_button:
-            action_buttons.append([self._callback_button("В меню", "back_to_start")])
+            action_buttons.append([self._callback_button("🏠 В меню", "back_to_start")])
 
         await self._respond(
             user_id=user_id,

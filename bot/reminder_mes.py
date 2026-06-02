@@ -39,13 +39,13 @@ async def send_confirmation_request(context, reservation):
                                 [
                                     {
                                         "type": "callback",
-                                        "text": "Да",
+                                        "text": "✅ Да",
                                         "payload": f"confirm_yes:{reservation['id']}",
                                         "intent": "positive",
                                     },
                                     {
                                         "type": "callback",
-                                        "text": "Нет",
+                                        "text": "❌ Нет",
                                         "payload": f"confirm_no:{reservation['id']}",
                                         "intent": "negative",
                                     },

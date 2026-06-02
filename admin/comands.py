@@ -93,7 +93,7 @@ async def admin_start(bot: Any, user_id: int, callback_id: str | None = None) ->
         callback_id=callback_id,
         text="Панель администратора. Выберите действие.",
         buttons=[
-            [_callback_button("Посмотреть заявки", "admin:view_reservations", intent="positive")],
+            [_callback_button("📋 Посмотреть заявки", "admin:view_reservations", intent="positive")],
         ],
     )
 
@@ -193,15 +193,15 @@ async def ask_admin_delete_record(
         bot,
         user_id=user_id,
         callback_id=callback_id,
-        text="Точно удалить запись из списка?",
+        text="Точно отклонить бронь?",
         buttons=[
             [
                 _callback_button(
-                    "Да, удалить",
-                    _decision_payload("confirm_delete", reservation_id, source),
+                    "❌ Да, отклонить",
+                    _decision_payload("reject", reservation_id, source),
                     intent="negative",
                 ),
-                _callback_button("Нет", _reservation_payload(reservation_id, source)),
+                _callback_button("↩️ Нет", _reservation_payload(reservation_id, source)),
             ]
         ],
     )
@@ -220,7 +220,7 @@ async def show_reservations(
             user_id=user_id,
             callback_id=callback_id,
             text="Сейчас активных заявок нет.",
-            buttons=[[_callback_button("В меню", "admin:menu")]],
+            buttons=[[_callback_button("🏠 В меню", "admin:menu")]],
         )
         return
 
@@ -232,7 +232,7 @@ async def show_reservations(
     buttons = []
     for reservation in page_items:
         label = (
-            f"{reservation['date']} {reservation['time']} · "
+            f"📅 {reservation['date']} {reservation['time']} · "
             f"{reservation['name']} · стол {reservation['table']}"
         )
         buttons.append(
@@ -241,13 +241,13 @@ async def show_reservations(
 
     pagination_buttons = []
     if page > 0:
-        pagination_buttons.append(_callback_button("Назад", f"admin:page:{page - 1}"))
+        pagination_buttons.append(_callback_button("⬅️ Назад", f"admin:page:{page - 1}"))
     if page < total_pages - 1:
-        pagination_buttons.append(_callback_button("Дальше", f"admin:page:{page + 1}"))
+        pagination_buttons.append(_callback_button("Дальше ➡️", f"admin:page:{page + 1}"))
     if pagination_buttons:
         buttons.append(pagination_buttons)
 
-    buttons.append([_callback_button("В меню", "admin:menu")])
+    buttons.append([_callback_button("🏠 В меню", "admin:menu")])
 
     await _respond(
         bot,
@@ -280,7 +280,7 @@ def build_nav_buttons(reservations: list[dict], index: int, source: str | None):
             )
         )
 
-    buttons.append(_callback_button("К списку", "admin:view_reservations"))
+    buttons.append(_callback_button("📋 К списку", "admin:view_reservations"))
 
     if index < len(reservations) - 1:
         buttons.append(
@@ -295,13 +295,13 @@ def build_nav_buttons(reservations: list[dict], index: int, source: str | None):
 def build_action_buttons(reservation_id: str, source: str | None):
     return [
         _callback_button(
-            "Принять",
+            "✅ Принять",
             _decision_payload("approve", reservation_id, source),
             intent="positive",
         ),
         _callback_button(
-            "Отклонить",
-            _decision_payload("reject", reservation_id, source),
+            "❌ Отклонить",
+            _decision_payload("delete", reservation_id, source),
             intent="negative",
         ),
     ]
@@ -313,13 +313,13 @@ def call_button(phone: str):
         "payload": f"{phone}",
     }
 
-def delete_button(reservation_id: str, source: str | None):
-    return [
-       _callback_button(
-            "Удалить из списка",
-            _decision_payload("delete", reservation_id, source),
-        )
-    ]
+# def delete_button(reservation_id: str, source: str | None):
+#     return [
+#        _callback_button(
+#             "Удалить из списка",
+#             _decision_payload("delete", reservation_id, source),
+#         )
+#     ]
 
 async def view_reservation(
     bot: Any,
@@ -343,7 +343,7 @@ async def view_reservation(
             user_id=user_id,
             callback_id=callback_id,
             text=text,
-            buttons=[[_callback_button("К списку", "admin:view_reservations")]],
+            buttons=[[_callback_button("📋 К списку", "admin:view_reservations")]],
         )
         return
 
@@ -362,7 +362,7 @@ async def view_reservation(
             buttons=[
                 nav_buttons,
                 build_action_buttons(reservation_id, source),
-                [_callback_button("В меню", "admin:menu")],
+                [_callback_button("🏠 В меню", "admin:menu")],
             ],
         )
 
@@ -382,8 +382,7 @@ async def view_reservation(
                 nav_buttons,
                 build_action_buttons(reservation_id, source),
                 [call_button(reservation["phone"])],
-                delete_button(reservation_id, source),
-                [_callback_button("В меню", "admin:menu")],
+                [_callback_button("🏠 В меню", "admin:menu")],
             ],
         )
         
@@ -481,7 +480,7 @@ async def handle_delete_reservation(
             callback_id=callback_id,
             text="Заявка уже удалена или не найдена.",
             buttons=[
-                [_callback_button("К списку", "admin:view_reservations")]
+                [_callback_button("📋 К списку", "admin:view_reservations")]
             ],
         )
         return
@@ -539,7 +538,7 @@ async def handle_reservation_decision(
             user_id=admin_user_id,
             callback_id=callback_id,
             text="Заявка не найдена.",
-            buttons=[[_callback_button("К списку", "admin:view_reservations")]],
+            buttons=[[_callback_button("📋 К списку", "admin:view_reservations")]],
         )
         return
 
@@ -575,12 +574,12 @@ async def handle_reservation_decision(
                 buttons=[
                     [
                         _callback_button(
-                            "Повторить",
+                            "🔄 Повторить",
                             _decision_payload("approve", reservation_id, source),
                             intent="positive",
                         )
                     ],
-                    [_callback_button("К заявке", _reservation_payload(reservation_id, source))],
+                    [_callback_button("📝 К заявке", _reservation_payload(reservation_id, source))],
                 ],
             )
             return
@@ -647,9 +646,9 @@ async def notify_admin_to_call(context: Any, reservation: dict[str, Any]) -> Non
 
     buttons = []
     if reservation.get("status") != "CONFIRMED":
-        buttons.append([_callback_button("Открыть заявку", f"admin:reservation:{reservation['id']}")])
+        buttons.append([_callback_button("📝 Открыть заявку", f"admin:reservation:{reservation['id']}")])
     else:
-        buttons.append([_callback_button("К списку", "admin:view_reservations")])
+        buttons.append([_callback_button("📋 К списку", "admin:view_reservations")])
 
     for admin_id in admin_ids:
         await _send_to_admin(admin_id, text, buttons=buttons)
@@ -667,7 +666,7 @@ async def notify_admin_to_cancel(context: Any, reservation: dict[str, Any]):
     )
 
     buttons = []
-    buttons.append([_callback_button("К списку", "admin:view_reservations")])
+    buttons.append([_callback_button("📋 К списку", "admin:view_reservations")])
 
     for admin_id in admin_ids:
         await _send_to_admin(admin_id, text, buttons=buttons)
@@ -690,12 +689,12 @@ async def notify_new_reservation(bot: Any, reservation_json: str | bytes) -> Non
     buttons = [
         [
             _callback_button(
-                "Открыть заявку",
+                "📝 Открыть заявку",
                 _reservation_payload(reservation["id"], ADMIN_NOTIFICATION_SOURCE),
                 intent="positive",
             )
         ],
-        [_callback_button("К списку", "admin:view_reservations")],
+        [_callback_button("📋 К списку", "admin:view_reservations")],
     ]
 
     for admin_id in _admin_ids():
