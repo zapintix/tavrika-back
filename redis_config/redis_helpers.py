@@ -36,11 +36,12 @@ def reservation_key(res_id: str) -> str:
 
 async def save_reservation(data:dict)->str:
     res_id = str(uuid.uuid4())
+    platform = data.get("platform", "telegram")
 
     reserv = {
         "id": res_id,
         "user_id": data.get("user_id"),
-        "platform": data.get("platform", "telegram"),
+        "platform": platform,
         "eventType": data.get("eventType", "telegram_bot"),
         "name":data["name"],
         "phone": data["phone"],
@@ -51,7 +52,7 @@ async def save_reservation(data:dict)->str:
         "time": data["time"],
         "occasion": data.get("occasion") or "-",
         "status": "PENDING",
-        "confirmation_status": "WAITING",  
+        "confirmation_status": "NOT_REQUIRED" if platform == "site" else "WAITING",
         "confirmation_message_id": None,
         "admin_notifications": {},
     }

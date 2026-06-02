@@ -45,7 +45,9 @@ def is_admin_payload(payload: str) -> bool:
             "admin:page:",
             "admin:reservation:",
             "admin:approve:",
-            "admin:delete:"
+            "admin:reject",
+            "admin:delete:",
+            "admin:confirm_delete:",
         )
     )
 
@@ -146,6 +148,17 @@ async def handle_admin_callback(bot: Any, update: dict[str, Any]) -> bool:
 
     if payload.startswith("admin:delete:"):
         reservation_id, source = _parse_reservation_action_payload(payload)
+        await ask_admin_delete_record(
+            bot,
+            user_id,
+            reservation_id,
+            callback_id=callback_id,
+            source=source,
+        )
+        return True
+
+    if payload.startswith("admin:confirm_delete:"):
+        reservation_id, source = _parse_reservation_action_payload(payload)
         await handle_delete_reservation(
             bot,
             user_id,
@@ -169,6 +182,29 @@ async def handle_admin_callback(bot: Any, update: dict[str, Any]) -> bool:
 
     return False
 
+async def ask_admin_delete_record(
+    bot: Any,
+    user_id: int,
+    reservation_id: str,
+    callback_id: str,
+    source: str | None = None,
+) -> None:
+    await _respond(
+        bot,
+        user_id=user_id,
+        callback_id=callback_id,
+        text="Точно удалить запись из списка?",
+        buttons=[
+            [
+                _callback_button(
+                    "Да, удалить",
+                    _decision_payload("confirm_delete", reservation_id, source),
+                    intent="negative",
+                ),
+                _callback_button("Нет", _reservation_payload(reservation_id, source)),
+            ]
+        ],
+    )
 
 async def show_reservations(
     bot: Any,
@@ -270,6 +306,13 @@ def build_action_buttons(reservation_id: str, source: str | None):
         ),
     ]
 
+def call_button(phone: str):
+    return {
+        "type": "clipboard",
+        "text": "📋 Скопировать номер",
+        "payload": f"{phone}",
+    }
+
 def delete_button(reservation_id: str, source: str | None):
     return [
        _callback_button(
@@ -337,6 +380,8 @@ async def view_reservation(
             text=text,
             buttons=[
                 nav_buttons,
+                build_action_buttons(reservation_id, source),
+                [call_button(reservation["phone"])],
                 delete_button(reservation_id, source),
                 [_callback_button("В меню", "admin:menu")],
             ],
@@ -371,7 +416,7 @@ async def create_reserve(reservation_data: dict[str, Any]) -> dict[str, Any]:
         "guestsCount": reservation_data.get("guests", 2),
         "comment": reservation_data.get("occasion") or "-",
         "durationInMinutes": 120,
-        "shouldRemind": True,
+        "shouldRemind": reservation_data.get("platform") != "site",
         "tableIds": [reservation_data["table_id"]],
         "estimatedStartTime": iso_date,
         "eventType": reservation_data.get("eventType", "max_bot"),
@@ -517,6 +562,7 @@ async def handle_reservation_decision(
             "time": reservation["time"],
             "occasion": reservation.get("occasion") or "-",
             "eventType": reservation.get("eventType", "max_bot"),
+            "platform": reservation.get("platform"),
         }
         reservation_result = await create_reserve(reservation_data)
 
@@ -542,7 +588,8 @@ async def handle_reservation_decision(
         iiko_id = reservation_result["iiko"]["reserveInfo"]["id"]
         await update_reservation_status(reservation_id, "CONFIRMED", iiko_id)
         reservation["status"] = "CONFIRMED"
-        schedule_reservation_reminders(context, reservation)
+        if reservation.get("platform") != "site":
+            schedule_reservation_reminders(context, reservation)
         admin_text = "Заявка подтверждена."
     else:
         user_text = (
@@ -727,10 +774,12 @@ async def _send_user_notification(
     text: str,
     context: Any | None = None,
 ) -> None:
-    if reservation.get("platform", "telegram") == "max":
+    if reservation.get("platform") == "max":
         await _send_max_message(reservation["user_id"], text)
         return
-
+    elif reservation.get("platform") == "site":
+        return
+    
     if context is not None:
         await context.bot.send_message(chat_id=reservation["user_id"], text=text)
         return

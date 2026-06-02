@@ -12,6 +12,9 @@ scheduler = AsyncIOScheduler()
 
 
 async def send_confirmation_request(context, reservation):
+    if reservation.get("platform") == "site" or reservation.get("user_id") is None:
+        return
+
     text = (
         "Напоминание о брони.\n\n"
         f"Дата: {reservation['date']} {reservation['time']}\n"
@@ -93,6 +96,10 @@ async def send_confirmation_request(context, reservation):
 
 
 def schedule_reservation_reminders(context, reservation):
+    if reservation.get("platform") == "site" or reservation.get("user_id") is None:
+        print(f"Для брони {reservation['id']} напоминание не требуется")
+        return
+
     reservation_time = datetime.fromisoformat(f"{reservation['date']}T{reservation['time']}")
     confirm_time = reservation_time - timedelta(hours=2)
     now = datetime.now()
