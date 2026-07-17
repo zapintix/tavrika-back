@@ -10,6 +10,7 @@ import hmac
 import os
 import json
 import httpx
+import asyncio
 import hashlib
 from urllib.parse import parse_qsl
 from operator import itemgetter
@@ -145,10 +146,33 @@ async def _build_reservation_payload(req: ReservationCreateRequest) -> dict:
         "occasion": req.occasion or "-",
     }
 
+@app.post("/api/test")
+async def test(req: ReservationTableRequest):
+    ordered_time = datetime.fromisoformat(
+        f"{req.date} {req.time}"
+    )
+
+    ordered_start = ordered_time - timedelta(minutes=120)
+    ordered_end = ordered_time  + timedelta(minutes=120)
+    data = await bot.fetch_tables_ids()
+    orders_ids = await bot.fetch_orders_by_table(data, ordered_start, ordered_end)
+
+
+    return orders_ids
 
 @app.post("/api/reservations/table")
 async def get_reserved_tables(req: ReservationTableRequest):
     day_reservations = await bot.fetch_day_reservations(req.date)
+    
+    ordered_time = datetime.fromisoformat(
+        f"{req.date} {req.time}"
+    )
+
+    ordered_start = ordered_time - timedelta(minutes=120)
+    ordered_end = ordered_time  + timedelta(minutes=120)
+
+    data = await bot.fetch_tables_ids()
+    orders_ids = await bot.fetch_orders_by_table(data, ordered_start, ordered_end)
 
     requested_start  = datetime.fromisoformat(
         f"{req.date}T{req.time}"
@@ -173,6 +197,7 @@ async def get_reserved_tables(req: ReservationTableRequest):
                 reserved_table_ids.update(r.get("tableIds", []))
             print(reserved_table_ids)
 
+    reserved_table_ids.update(orders_ids)        
     return {
         "reservedTableIds": list(reserved_table_ids)
     }

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import httpx
 
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -57,7 +58,10 @@ class ReservationBot:
             raise RuntimeError("MaxAPIClient is not configured")
         return self.max_client
 
-    async def fetch_tables(self, token: str, terminal_group_id: str):
+    async def fetch_tables(self):
+        terminal_group_id = os.getenv("TERMINAL_GROUP_ID")
+        token = update_iiko_token(os.getenv("IIKO_KEY"))
+        
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
@@ -114,14 +118,52 @@ class ReservationBot:
 
         return tables_info
 
-    async def fetch_day_reservations(self, reservation_date: str):
+    async def init_by_table(self, tableIds):
+        organization_id = os.getenv("ORGANIZATION_ID")
+        terminal_group_id = os.getenv("TERMINAL_GROUP_ID")
+        
+        payload = {
+            "organizationId":organization_id,
+            "terminalGroupId":terminal_group_id,
+            "tableIds": tableIds
+        }
+
+        data = await self.iiko_post(
+            "/api/1/order/init_by_table",
+            payload
+        )
+        return data
+
+    async def fetch_tables_ids(self):
+
+        tables = await self.fetch_tables()
+
+        return [
+            table["id"]
+            for section in tables
+            for table in section["tables"]
+        ]
+    
+    async def iiko_post(self, endpoint: str, payload: dict):
         token = update_iiko_token(os.getenv("IIKO_KEY"))
-        section_id = os.getenv("SECTION_ID")
 
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         }
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                f"https://api-ru.iiko.services{endpoint}",
+                json=payload,
+                headers=headers,
+            )
+
+        response.raise_for_status()
+        return response.json()
+
+    async def fetch_day_reservations(self, reservation_date: str):
+        section_id = os.getenv("SECTION_ID")
 
         payload = {
             "restaurantSectionIds": [section_id],
@@ -129,15 +171,53 @@ class ReservationBot:
             "dateTo": f"{reservation_date}T23:59:59",
         }
 
-        response = requests.post(
-            "https://api-ru.iiko.services/api/1/reserve/restaurant_sections_workload",
-            json=payload,
-            headers=headers,
-            timeout=30,
+        data = await self.iiko_post(
+            "/api/1/reserve/restaurant_sections_workload",
+            payload
         )
-        response.raise_for_status()
-        return response.json().get("reserves", [])
+        return data.get("reserves", [])
 
+    async def fetch_orders_by_table(
+        self,
+        table_ids: list[str],
+        requested_start,
+        requested_end
+    ):
+
+        organization_id = os.getenv("ORGANIZATION_ID")
+        self.init_by_table(table_ids)
+        payload = {
+            "organizationIds": [organization_id],
+            "tableIds": table_ids,
+            "statuses": ["New"],
+            "dateFrom": requested_start.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+            "dateTo": requested_end.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+        }
+
+        print("-------------------------------------------------------")
+        print(payload["tableIds"])
+        print("-------------------------------------------------------")
+        print(len(payload["tableIds"]))
+        print("-------------------------------------------------------")
+        
+
+        data = await self.iiko_post(
+            "/api/1/order/by_table",
+            payload
+        )
+
+        print(data)
+        occupied_table_ids = set()
+
+        for item in data.get("orders", []):
+            order = item.get("order", {})
+
+            occupied_table_ids.update(
+                order.get("tableIds", [])
+            )
+        
+        return list(occupied_table_ids)
+    
     async def get_available_tables(
         self,
         reservation_date: str,
