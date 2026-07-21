@@ -224,10 +224,7 @@ class ReservationBot:
         reservation_time: str,
         guests: int,
     ) -> list[dict[str, Any]]:
-        terminal_group_id = os.getenv("TERMINAL_GROUP_ID")
-        token = update_iiko_token(os.getenv("IIKO_KEY"))
-
-        tables = await self.fetch_tables(token, terminal_group_id)
+        tables = await self.fetch_tables()
         day_reservations = await self.fetch_day_reservations(reservation_date)
         requested_time = datetime.fromisoformat(f"{reservation_date}T{reservation_time}")
 
