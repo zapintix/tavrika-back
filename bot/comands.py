@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from admin.comands import (
     admin_start,
     cancel_reservation,
+    notify_admin_confirmed,
     notify_admin_to_cancel,
     get_all_reservations,
     handle_admin_callback,
@@ -797,7 +798,15 @@ class ReservationBot:
         await self.view_detail_reservation(user_id, reservation_id, callback_id)
 
     async def confirm_visit_yes(self, reservation_id: str, callback_id: str) -> None:
+        reservation = await get_reservation_by_id(reservation_id)
+        if not reservation:
+            await self._answer_notification(callback_id, "Бронь не найдена")
+            return
+
         await update_reservation_confirmation(reservation_id, "CONFIRMED")
+        reservation["confirmation_status"] = "CONFIRMED"
+        await notify_admin_confirmed(None, reservation)
+
         client = self._require_client()
         await client.answer_callback(
             callback_id,

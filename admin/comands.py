@@ -627,6 +627,27 @@ async def handle_reservation_decision(
         await _send_to_admin(admin_user_id, admin_text)
 
 
+async def notify_admin_confirmed(context: Any, reservation: dict[str, Any]) -> None:
+    admin_ids = _admin_ids()
+
+    text = (
+        "Гость подтвердил бронь.\n\n"
+        f"Имя: {reservation['name']}\n"
+        f"Телефон: {reservation['phone']}\n"
+        f"Дата: {reservation['date']} {reservation['time']}\n"
+        f"Стол: {reservation['table']}\n"
+        f"Мероприятие: {reservation.get('occasion') or '-'}\n\n"
+    )
+
+    if ADMIN_TRANSPORT == "telegram":
+        await _send_to_telegram_admins(admin_ids, text)
+        return
+
+    buttons = [[_callback_button("📋 К списку", "admin:view_reservations")]]
+    for admin_id in admin_ids:
+        await _send_to_admin(admin_id, text, buttons=buttons)
+
+
 async def notify_admin_to_call(context: Any, reservation: dict[str, Any]) -> None:
     admin_ids = _admin_ids()
 
